@@ -80,7 +80,7 @@ if ($action === 'submit_homework') {
     $uploadedFileName = null;
     $uploadedFilePath = null;
 
-    if (isset($_FILES['submission_file']) && (int) $_FILES['submission_file']['error'] !== UPLOAD_ERR_NO_FILE) {
+    if (!$errors && isset($_FILES['submission_file']) && (int) $_FILES['submission_file']['error'] !== UPLOAD_ERR_NO_FILE) {
         if ((int) $_FILES['submission_file']['error'] !== UPLOAD_ERR_OK) {
             $errors[] = 'Upload file gagal, silakan coba lagi.';
         } else {
@@ -231,7 +231,7 @@ $flash = chemnama_flash();
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="assets/css/style.css">
+    <link rel="stylesheet" href="assets/css/style.css?v=<?= filemtime(__DIR__ . '/assets/css/style.css') ?>">
 </head>
 <body class="dashboard-page">
 <main class="guru-page student-page">
@@ -255,6 +255,7 @@ $flash = chemnama_flash();
         <div class="guru-menu-block">
             <span class="guru-menu-title">MENU</span>
             <nav class="guru-menu-list">
+                <a class="guru-menu-item" href="phet_viewer.php"><?= chemnama_icon('beaker', '#6b7280'); ?><span>Simulasi PhET</span></a>
                 <a class="guru-menu-item" href="dashboard.php"><?= chemnama_icon('chart', '#6b7280'); ?><span>Dashboard</span></a>
                 <a class="guru-menu-item" href="siswa_materi.php"><?= chemnama_icon('file', '#6b7280'); ?><span>Materi Guru</span></a>
                 <!-- <a class="guru-menu-item" href="siswa_games.php"><?= chemnama_icon('beaker', '#6b7280'); ?><span>Games</span></a>
@@ -400,7 +401,7 @@ $flash = chemnama_flash();
     </section>
 </main>
 
-<script src="assets/js/app.js?v=20260407"></script>
+<script src="assets/js/app.js?v=<?= filemtime(__DIR__ . '/assets/js/app.js') ?>"></script>
 <script>
     (function () {
         const tabs = document.querySelectorAll('[data-filter-tabs="homework"] .js-module-tab');

@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 800" fill="none">
+  <g stroke="#a78bfa" stroke-width="1.5" opacity=".55">
+    <g transform="translate(145 155)">
+      <ellipse rx="105" ry="38"/><ellipse rx="105" ry="38" transform="rotate(60)"/><ellipse rx="105" ry="38" transform="rotate(120)"/>
+      <circle r="10" fill="#c4b5fd"/><circle cx="99" cy="13" r="5" fill="#67e8f9"/>
+    </g>
+    <path d="m940 100 60-35 60 35v70l-60 35-60-35zm8 5 52-30m52 30v60m-8 12-44 26M940 100l-55-30m175 100 54 32"/>
+    <g transform="translate(120 610)">
+      <path d="m0 0 65-35 65 35 65-35 65 35"/><circle r="12"/><circle cx="65" cy="-35" r="9"/>
+      <circle cx="130" r="12"/><circle cx="195" cy="-35" r="9"/><circle cx="260" r="12"/>
+    </g>
+    <g transform="translate(1020 610)">
+      <ellipse rx="75" ry="75"/><ellipse rx="115" ry="115"/><circle r="12" fill="#67e8f9"/>
+      <circle cy="-75" r="5" fill="#c4b5fd"/><circle cx="115" r="5" fill="#c4b5fd"/>
+    </g>
+  </g>
+  <g fill="#67e8f9" opacity=".5" font-family="monospace" font-size="20">
+    <text x="370" y="100">1s² 2s² 2p⁶</text><text x="810" y="400">H₂O</text><text x="450" y="730">CO₂</text>
+  </g>
+</svg>

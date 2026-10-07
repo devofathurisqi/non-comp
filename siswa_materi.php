@@ -48,6 +48,7 @@ $materialsStmt = $pdo->prepare(
      LEFT JOIN user_profiles up_teacher ON up_teacher.user_id = u.id
      LEFT JOIN material_reads mr ON mr.material_id = m.id AND mr.student_id = :student_id
      WHERE m.is_published = 1
+       AND (m.class_name IS NULL OR m.class_name = :kelas_exact)
        AND u.role = "guru"
              AND INSTR(
                  CONCAT(CHAR(44), REPLACE(up_teacher.kelas, CONCAT(CHAR(44), CHAR(32)), CHAR(44)), CHAR(44)),
@@ -58,6 +59,7 @@ $materialsStmt = $pdo->prepare(
 $materialsStmt->execute([
     'student_id' => $userId,
     'kelas' => $studentClass,
+    'kelas_exact' => $studentClass,
 ]);
 $materials = $materialsStmt->fetchAll();
 
@@ -78,9 +80,10 @@ $simulationsStmt = $pdo->prepare(
      JOIN modules mo ON mo.id = s.module_id
      LEFT JOIN simulation_reads sr ON sr.simulation_id = s.id AND sr.student_id = :student_id
      WHERE s.is_published = 1
+       AND (s.class_name IS NULL OR s.class_name = :kelas)
      ORDER BY mo.sort_order ASC, s.created_at DESC'
 );
-$simulationsStmt->execute(['student_id' => $userId]);
+$simulationsStmt->execute(['student_id' => $userId, 'kelas' => $studentClass]);
 $simulations = $simulationsStmt->fetchAll();
 
 $simulationsByModule = [];
@@ -185,7 +188,7 @@ $typeColorMap = [
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="assets/css/style.css">
+    <link rel="stylesheet" href="assets/css/style.css?v=<?= filemtime(__DIR__ . '/assets/css/style.css') ?>">
     <style>
         .siswa-toast {
             position: fixed;
@@ -231,6 +234,7 @@ $typeColorMap = [
 </head>
 <body class="dashboard-page">
 <main class="guru-page student-page">
+
     <button class="guru-mobile-toggle" type="button" data-guru-sidebar-toggle aria-label="Buka navigasi" aria-controls="studentSidebar" aria-expanded="false">
         <span></span>
         <span></span>
@@ -251,6 +255,7 @@ $typeColorMap = [
         <div class="guru-menu-block">
             <span class="guru-menu-title">MENU</span>
             <nav class="guru-menu-list">
+                <a class="guru-menu-item" href="phet_viewer.php"><?= chemnama_icon('beaker', '#6b7280'); ?><span>Simulasi PhET</span></a>
                    <a class="guru-menu-item" href="dashboard.php"><?= chemnama_icon('chart', '#6b7280'); ?><span>Dashboard</span></a>
                 <a class="guru-menu-item is-active" href="siswa_materi.php"><?= chemnama_icon('file', '#0f9d58'); ?><span>Materi</span></a>
                 <!-- <a class="guru-menu-item" href="siswa_games.php"><?= chemnama_icon('beaker', '#6b7280'); ?><span>Games</span></a> -->
@@ -374,6 +379,6 @@ $typeColorMap = [
         }, 3200);
     })();
 </script>
-<script src="assets/js/app.js?v=20260407"></script>
+<script src="assets/js/app.js?v=<?= filemtime(__DIR__ . '/assets/js/app.js') ?>"></script>
 </body>
 </html>

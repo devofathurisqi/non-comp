@@ -653,7 +653,7 @@ $guruMenus = [
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="assets/css/style.css">
+    <link rel="stylesheet" href="assets/css/style.css?v=<?= filemtime(__DIR__ . '/assets/css/style.css') ?>">
 </head>
 <body class="dashboard-page">
 <main class="guru-page">
@@ -677,6 +677,7 @@ $guruMenus = [
         <div class="guru-menu-block">
             <span class="guru-menu-title">MENU</span>
             <nav class="guru-menu-list">
+                <a class="guru-menu-item" href="phet_viewer.php"><?= chemnama_icon('beaker', '#6b7280'); ?><span>Simulasi PhET</span></a>
                 <?php foreach ($guruMenus as $menu): ?>
                     <a class="guru-menu-item <?= $menu['active'] ? 'is-active' : ''; ?>" href="<?= chemnama_e($menu['href']); ?>">
                         <?= chemnama_icon($menu['icon'], $menu['active'] ? '#0f9d58' : '#6b7280'); ?>
@@ -1009,7 +1010,7 @@ $guruMenus = [
     </section>
 </main>
 
-<script src="assets/js/app.js?v=20260407"></script>
+<script src="assets/js/app.js?v=<?= filemtime(__DIR__ . '/assets/js/app.js') ?>"></script>
 <script>
     (function () {
         const searchInput = document.querySelector('[data-data-siswa-search]');

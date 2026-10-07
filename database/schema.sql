@@ -1,3 +1,10 @@
+CREATE TABLE IF NOT EXISTS auth_attempts (
+    attempt_key CHAR(64) NOT NULL PRIMARY KEY,
+    attempts INT UNSIGNED NOT NULL DEFAULT 0,
+    window_start DATETIME NOT NULL,
+    KEY idx_auth_attempts_window (window_start)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 CREATE TABLE IF NOT EXISTS users (
     id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
     name VARCHAR(120) NOT NULL,
@@ -78,7 +85,7 @@ CREATE TABLE IF NOT EXISTS knowledge_tips (
 
 CREATE TABLE IF NOT EXISTS user_profiles (
     user_id BIGINT UNSIGNED NOT NULL,
-    kelas VARCHAR(30) NOT NULL,
+    kelas VARCHAR(255) NOT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (user_id),
     CONSTRAINT fk_user_profiles_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE

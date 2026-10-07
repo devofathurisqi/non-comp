@@ -20,8 +20,8 @@ if ($gameId <= 0) {
     $gameId = (int) $firstStmt->fetchColumn();
 }
 
-$gameStmt = $pdo->prepare('SELECT g.*, mo.badge AS module_badge, mo.title AS module_title, u.name AS teacher_name FROM chem_match_games g JOIN modules mo ON mo.id = g.module_id JOIN users u ON u.id = g.created_by WHERE g.id = :id AND g.is_published = 1 LIMIT 1');
-$gameStmt->execute(['id' => $gameId]);
+$gameStmt = $pdo->prepare('SELECT g.*, mo.badge AS module_badge, mo.title AS module_title, u.name AS teacher_name FROM chem_match_games g JOIN modules mo ON mo.id = g.module_id JOIN users u ON u.id = g.created_by WHERE g.id = :id AND g.is_published = 1 AND (g.class_name IS NULL OR g.class_name = :kelas) LIMIT 1');
+$gameStmt->execute(['id' => $gameId, 'kelas' => $studentClass]);
 $game = $gameStmt->fetch();
 
 if (!$game) {
@@ -37,8 +37,8 @@ $returnUrl = $isEmbedded ? $materialUrl : $gamesUrl;
 chemnama_mark_chem_match_as_read($pdo, (int) $game['id'], $userId);
 $isRead = chemnama_is_chem_match_read($pdo, (int) $game['id'], $userId);
 
-$relatedStmt = $pdo->prepare('SELECT id, left_term, right_term FROM chem_match_games WHERE module_id = :module_id AND is_published = 1 AND id <> :id ORDER BY created_at DESC LIMIT 6');
-$relatedStmt->execute(['module_id' => (int) $game['module_id'], 'id' => (int) $game['id']]);
+$relatedStmt = $pdo->prepare('SELECT id, left_term, right_term FROM chem_match_games WHERE module_id = :module_id AND is_published = 1 AND id <> :id AND (class_name IS NULL OR class_name = :kelas) ORDER BY created_at DESC LIMIT 6');
+$relatedStmt->execute(['module_id' => (int) $game['module_id'], 'id' => (int) $game['id'], 'kelas' => $studentClass]);
 $relatedGames = $relatedStmt->fetchAll();
 
 $matchGames = array_slice(array_merge([$game], $relatedGames), 0, 6);
@@ -89,7 +89,7 @@ $siswaMenus = [
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Tarik Garis - Nom Comp</title>
     <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
-    <link rel="stylesheet" href="assets/css/style.css">
+    <link rel="stylesheet" href="assets/css/style.css?v=<?= filemtime(__DIR__ . '/assets/css/style.css') ?>">
     <style>
         body.chem-match-page { overflow-x: hidden; }
         .chem-match-stage { min-height: 100vh; background: linear-gradient(180deg, rgba(34, 13, 67, 0.98) 0%, rgba(22, 9, 52, 0.98) 52%, rgba(18, 8, 41, 1) 100%); }
@@ -241,7 +241,8 @@ $siswaMenus = [
         <div class="guru-sidebar-overlay" data-guru-sidebar-overlay></div>
         <aside class="guru-sidebar" id="studentSidebar">
             <div class="guru-brand"><a class="brand" href="index.php"><?= chemnama_icon('brand', '#d97706'); ?><span>Nom Comp</span></a><p>Panel Siswa</p><div class="guru-class-chip"><?= chemnama_e($studentClass); ?></div></div>
-            <div class="guru-menu-block"><span class="guru-menu-title">MENU</span><nav class="guru-menu-list"><?php foreach ($siswaMenus as $menu): ?><a class="guru-menu-item <?= $menu['active'] ? 'is-active' : ''; ?>" href="<?= chemnama_e($menu['href']); ?>"><?= chemnama_icon($menu['icon'], $menu['active'] ? '#0f9d58' : '#6b7280'); ?><span><?= chemnama_e($menu['label']); ?></span></a><?php endforeach; ?></nav></div>
+            <div class="guru-menu-block"><span class="guru-menu-title">MENU</span><nav class="guru-menu-list">
+                <a class="guru-menu-item" href="phet_viewer.php"><?= chemnama_icon('beaker', '#6b7280'); ?><span>Simulasi PhET</span></a><?php foreach ($siswaMenus as $menu): ?><a class="guru-menu-item <?= $menu['active'] ? 'is-active' : ''; ?>" href="<?= chemnama_e($menu['href']); ?>"><?= chemnama_icon($menu['icon'], $menu['active'] ? '#0f9d58' : '#6b7280'); ?><span><?= chemnama_e($menu['label']); ?></span></a><?php endforeach; ?></nav></div>
             <div class="guru-menu-block"><span class="guru-menu-title">NAVIGASI</span><nav class="guru-menu-list"><a class="guru-menu-item logout" href="logout.php"><?= chemnama_icon('logout', '#ef4444'); ?><span>Keluar</span></a></nav></div>
         </aside>
     <?php endif; ?>
@@ -410,7 +411,7 @@ $siswaMenus = [
             saveState({ completedAt: Date.now(), completionTime: finalTime });
             setFinishButtonEnabled(true);
 
-            const completionSeconds = Math.floor((Date.now() - startAt) / 1000);
+            const completionSeconds = Math.max(1, Math.floor((Date.now() - startAt) / 1000));
             fetch('api_record_game_completion.php', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -539,5 +540,6 @@ $siswaMenus = [
     render();
 })();
 </script>
+<script src="assets/js/app.js?v=<?= filemtime(__DIR__ . '/assets/js/app.js') ?>"></script>
 </body>
 </html>

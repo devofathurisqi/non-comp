@@ -7,6 +7,13 @@ chemnama_require_auth('siswa');
 
 header('Content-Type: application/json');
 
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    http_response_code(405);
+    header('Allow: POST');
+    echo json_encode(['ok' => false, 'message' => 'Gunakan POST.']);
+    exit;
+}
+
 $raw = file_get_contents('php://input');
 $payload = json_decode($raw ?: '', true);
 if (!is_array($payload)) {
@@ -36,9 +43,10 @@ $quizSetStmt = $pdo->prepare(
      JOIN users u ON u.id = qs.created_by
      LEFT JOIN user_profiles up_teacher ON up_teacher.user_id = u.id
      WHERE qs.id = :quiz_set_id AND qs.is_published = 1 AND u.role = "guru"
+       AND (qs.class_name IS NULL OR qs.class_name = :kelas)
      LIMIT 1'
 );
-$quizSetStmt->execute(['quiz_set_id' => $quizSetId]);
+$quizSetStmt->execute(['quiz_set_id' => $quizSetId, 'kelas' => $studentClass]);
 $quizSet = $quizSetStmt->fetch();
 if (!$quizSet) {
     echo json_encode(['ok' => false, 'message' => 'Quiz tidak ditemukan.']);

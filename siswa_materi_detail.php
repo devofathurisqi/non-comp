@@ -22,48 +22,7 @@ chemnama_ensure_quick_quiz_score_column($pdo);
 
 function chemnama_extract_youtube_embed_url(?string $url): ?string
 {
-    if (!$url) {
-        return null;
-    }
-
-    $trimmed = trim($url);
-    if ($trimmed === '') {
-        return null;
-    }
-
-    $parts = parse_url($trimmed);
-    if (!is_array($parts)) {
-        return null;
-    }
-
-    $host = strtolower((string) ($parts['host'] ?? ''));
-
-    if (strpos($host, 'youtu.be') !== false) {
-        $videoId = trim((string) ($parts['path'] ?? ''), '/');
-        return $videoId !== '' ? 'https://www.youtube.com/embed/' . rawurlencode($videoId) : null;
-    }
-
-    if (strpos($host, 'youtube.com') !== false) {
-        $path = (string) ($parts['path'] ?? '');
-
-        if ($path === '/watch') {
-            parse_str((string) ($parts['query'] ?? ''), $query);
-            if (!empty($query['v'])) {
-                return 'https://www.youtube.com/embed/' . rawurlencode((string) $query['v']);
-            }
-        }
-
-        if (strpos($path, '/embed/') === 0) {
-            return $trimmed;
-        }
-
-        if (strpos($path, '/shorts/') === 0) {
-            $videoId = trim(substr($path, 8), '/');
-            return $videoId !== '' ? 'https://www.youtube.com/embed/' . rawurlencode($videoId) : null;
-        }
-    }
-
-    return null;
+    return chemnama_youtube_embed_url($url);
 }
 
 $moduleStmt = $pdo->prepare(
@@ -103,10 +62,10 @@ $simStmt = $pdo->prepare(
     'SELECT id, product_name, product_formula, atom_first, atom_second, bond_type, molecule_layout,
              reaction_energy, reaction_type, description_about, found_in, daily_usage
      FROM simulations
-     WHERE module_id = :module_id AND is_published = 1
+     WHERE module_id = :module_id AND is_published = 1 AND (class_name IS NULL OR class_name = :kelas)
      LIMIT 3'
 );
-$simStmt->execute(['module_id' => $moduleId]);
+$simStmt->execute(['module_id' => $moduleId, 'kelas' => $studentClass]);
 $simulations = $simStmt->fetchAll();
 
 // Get quiz sets for this module (Step 5)
@@ -115,12 +74,12 @@ $quizStmt = $pdo->prepare(
     'SELECT qs.id, qs.title, qs.question_time_limit_seconds, COUNT(q.id) AS total_questions
      FROM quiz_sets qs
      LEFT JOIN questions q ON q.quiz_set_id = qs.id AND q.is_published = 1
-     WHERE qs.module_id = :module_id AND qs.is_published = 1
+     WHERE qs.module_id = :module_id AND qs.is_published = 1 AND (qs.class_name IS NULL OR qs.class_name = :kelas)
      GROUP BY qs.id
      HAVING total_questions > 0
      LIMIT 1'
 );
-$quizStmt->execute(['module_id' => $moduleId]);
+$quizStmt->execute(['module_id' => $moduleId, 'kelas' => $studentClass]);
 $quizSets = $quizStmt->fetchAll();
 
 // Get first quiz set questions for inline display
@@ -172,16 +131,16 @@ $carikataGames = [];
 
 $tarigarisMatcher = $pdo->prepare(
     'SELECT id, left_term, right_term FROM chem_match_games
-     WHERE module_id = :module_id AND is_published = 1 LIMIT 5'
+     WHERE module_id = :module_id AND is_published = 1 AND (class_name IS NULL OR class_name = :kelas) LIMIT 5'
 );
-$tarigarisMatcher->execute(['module_id' => $moduleId]);
+$tarigarisMatcher->execute(['module_id' => $moduleId, 'kelas' => $studentClass]);
 $tarigaris = $tarigarisMatcher->fetchAll();
 
 $carikataStmt = $pdo->prepare(
     'SELECT id, target_word, hint FROM word_search_games
-     WHERE module_id = :module_id AND is_published = 1 LIMIT 3'
+     WHERE module_id = :module_id AND is_published = 1 AND (class_name IS NULL OR class_name = :kelas) LIMIT 3'
 );
-$carikataStmt->execute(['module_id' => $moduleId]);
+$carikataStmt->execute(['module_id' => $moduleId, 'kelas' => $studentClass]);
 $carikataGames = $carikataStmt->fetchAll();
 
 $activeGameType = (string) ($_GET['play_game'] ?? '');
@@ -202,10 +161,10 @@ $matStmt = $pdo->prepare(
     'SELECT m.id, m.title, m.type, m.youtube_url, m.description, m.content_text, m.file_path, m.created_at, m.is_published, m.created_by, u.name AS teacher_name
      FROM materials m
      JOIN users u ON u.id = m.created_by
-     WHERE m.module_id = :module_id AND m.is_published = 1
+     WHERE m.module_id = :module_id AND m.is_published = 1 AND (m.class_name IS NULL OR m.class_name = :kelas)
      ORDER BY m.id'
 );
-$matStmt->execute(['module_id' => $moduleId]);
+$matStmt->execute(['module_id' => $moduleId, 'kelas' => $studentClass]);
 $materials = $matStmt->fetchAll();
 
 // If multiple materials exist, only keep those created by the module's connected teacher
@@ -238,7 +197,7 @@ foreach ($materials as $m) {
         $videoMaterials[] = $m;
     }
 
-    if ($mType === 'teks' || $mType === 'pdf') {
+    if (in_array($mType, ['teks', 'pdf', 'presentasi', 'animasi'], true)) {
         $textMaterials[] = $m;
     }
 }
@@ -325,7 +284,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['quick_quiz_answer']))
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="assets/css/style.css">
+    <link rel="stylesheet" href="assets/css/style.css?v=<?= filemtime(__DIR__ . '/assets/css/style.css') ?>">
     <style>
         .materi-steps-wrapper {
             display: grid;
@@ -333,13 +292,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['quick_quiz_answer']))
         }
 
         .materi-steps-nav {
-            display: flex;
+            display: grid;
+            grid-template-columns: repeat(6, minmax(0, 1fr));
             align-items: center;
             position: relative;
             padding: 32px 0;
             overflow-x: auto;
             scroll-behavior: smooth;
-            gap: 150px;
+            gap: 12px;
         }
 
         .materi-steps-nav::-webkit-scrollbar {
@@ -387,7 +347,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['quick_quiz_answer']))
             text-decoration: none;
             position: relative;
             z-index: 2;
-            min-width: 80px;
+            min-width: 0;
             text-align: center;
             flex: 0 0 auto;
         }
@@ -870,8 +830,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['quick_quiz_answer']))
 
         .simulation-inline-frame {
             width: 100%;
-            min-height: 980px;
-            height: 92vh;
+            min-height: 780px;
+            height: 100vh;
             border: 0;
             border-radius: 18px;
             overflow: hidden;
@@ -1338,7 +1298,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['quick_quiz_answer']))
         .button-primary:hover {
             box-shadow: 0 0 20px rgba(124, 58, 237, 0.4);
         }
-    </style>
+    @media (max-width: 600px) { .materi-steps-nav { grid-template-columns: repeat(3, minmax(0, 1fr)); padding: 16px 0; gap: 20px 8px; } .materi-steps-nav::before { display: none; } }
+</style>
 </head>
 <body class="dashboard-page">
 <main class="guru-page student-page">
@@ -1362,6 +1323,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['quick_quiz_answer']))
         <div class="guru-menu-block">
             <span class="guru-menu-title">MENU</span>
             <nav class="guru-menu-list">
+                <a class="guru-menu-item" href="phet_viewer.php"><?= chemnama_icon('beaker', '#6b7280'); ?><span>Simulasi PhET</span></a>
                 <a class="guru-menu-item" href="dashboard.php"><?= chemnama_icon('chart', '#6b7280'); ?><span>Dashboard</span></a>
                 <a class="guru-menu-item is-active" href="siswa_materi.php"><?= chemnama_icon('file', '#0f9d58'); ?><span>Materi Guru</span></a>
                 <!-- <a class="guru-menu-item" href="siswa_games.php"><?= chemnama_icon('beaker', '#6b7280'); ?><span>Games</span></a> -->
@@ -1383,7 +1345,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['quick_quiz_answer']))
     <section class="guru-content student-content siswa-materi-page">
         <div class="siswa-materi-head">
             <h1>Pembelajaran Materi</h1>
-            <p>5 Langkah Belajar Efektif</p>
+            <p>6 Langkah Belajar Efektif</p>
             <a class="siswa-materi-back" href="siswa_materi.php"><?= chemnama_icon('switch', '#64748b'); ?> Kembali</a>
         </div>
 
@@ -1571,25 +1533,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['quick_quiz_answer']))
                         <!-- STEP 3: SIMULASI -->
                         <div class="step-panel <?= $currentStep == 3 ? 'is-active' : ''; ?>" data-step-panel="3">
                             <div class="step-content-header">
-                                <h3><?= chemnama_icon('beaker', '#14b8a6'); ?> Simulasi Reaksi</h3>
-                                <span class="step-content-chip"><?= count($simulations); ?> Simulasi</span>
+                                <h3><?= chemnama_icon('beaker', '#14b8a6'); ?> Simulasi PhET</h3>
+                                <span class="step-content-chip">6 Simulasi PhET</span>
                             </div>
 
-                            <?php if (!empty($simulations)): ?>
-                                <?php $inlineSimulation = $simulations[0] ?? null; ?>
-                                <?php if ($inlineSimulation): ?>
-                                    <iframe
-                                        class="simulation-inline-frame"
-                                        src="siswa_simulasi.php?id=<?= (int) $inlineSimulation['id']; ?>&module_id=<?= $moduleId; ?>&embed=1"
-                                        title="<?= chemnama_e((string) $inlineSimulation['product_name']); ?>"
-                                        loading="lazy"
-                                        allowfullscreen></iframe>
-                                <?php endif; ?>
-                            <?php else: ?>
-                                <div style="padding:40px; text-align:center; background:rgba(255,255,255,0.03); border-radius:12px; color:#94a3b8;">
-                                    <p>Simulasi reaksi belum tersedia untuk materi ini.</p>
-                                </div>
-                            <?php endif; ?>
+                            <p class="simulation-inline-note">Pilih simulasi PhET dan lakukan percobaan sebelum melanjutkan ke materi pembelajaran.</p>
+                            <iframe
+                                class="simulation-inline-frame"
+                                src="phet_viewer.php?embed=1"
+                                title="Laboratorium Simulasi PhET"
+                                loading="lazy"
+                                allow="fullscreen"
+                                allowfullscreen></iframe>
                         </div>
 
                         <!-- STEP 4: MATERI -->
@@ -2219,7 +2174,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['quick_quiz_answer']))
         </div>
     </section>
 </main>
-<script src="assets/js/app.js"></script>
+<script src="assets/js/app.js?v=<?= filemtime(__DIR__ . '/assets/js/app.js') ?>"></script>
 <script>
     // Handle quick quiz option selection
     document.querySelectorAll('[data-option]').forEach(btn => {
@@ -2254,12 +2209,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['quick_quiz_answer']))
         });
     });
 
-    // Mobile scroll adjustment for step nav
-    const stepsNav = document.querySelector('[data-steps-nav]');
-    const activeStepBtn = stepsNav.querySelector('.materi-step-btn.is-active');
-    if (activeStepBtn) {
-        activeStepBtn.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
-    }
 
     // Module completion handler
     const completeBtn = document.querySelector('[data-complete-module]');

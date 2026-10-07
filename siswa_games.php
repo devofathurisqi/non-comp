@@ -38,7 +38,7 @@ $siswaMenus = [
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Games - Nom Comp</title>
     <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
-    <link rel="stylesheet" href="assets/css/style.css">
+    <link rel="stylesheet" href="assets/css/style.css?v=<?= filemtime(__DIR__ . '/assets/css/style.css') ?>">
 </head>
 <body class="dashboard-page">
 <main class="guru-page student-page">
@@ -62,6 +62,7 @@ $siswaMenus = [
         <div class="guru-menu-block">
             <span class="guru-menu-title">MENU</span>
             <nav class="guru-menu-list">
+                <a class="guru-menu-item" href="phet_viewer.php"><?= chemnama_icon('beaker', '#6b7280'); ?><span>Simulasi PhET</span></a>
                    <a class="guru-menu-item" href="dashboard.php"><?= chemnama_icon('chart', '#6b7280'); ?><span>Dashboard</span></a>
                 <a class="guru-menu-item" href="siswa_materi.php"><?= chemnama_icon('file', '#0f9d58'); ?><span>Materi</span></a>
                 <!-- <a class="guru-menu-item is-active" href="siswa_games.php"><?= chemnama_icon('beaker', '#6b7280'); ?><span>Games</span></a> -->
@@ -114,5 +115,6 @@ $siswaMenus = [
         </div>
     </section>
 </main>
+<script src="assets/js/app.js?v=<?= filemtime(__DIR__ . '/assets/js/app.js') ?>"></script>
 </body>
 </html>

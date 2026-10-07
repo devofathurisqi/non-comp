@@ -472,17 +472,13 @@ if ($role === 'guru') {
         'SELECT
             (SELECT COUNT(*) FROM chem_match_games g WHERE g.created_by = :teacher_id_match AND g.is_published = 1 AND (g.class_name = :kelas_match OR g.class_name IS NULL))
             +
-            (SELECT COUNT(*) FROM word_search_games g WHERE g.created_by = :teacher_id_word AND g.is_published = 1 AND (g.class_name = :kelas_word OR g.class_name IS NULL))
-            +
-            (SELECT COUNT(*) FROM simulations g WHERE g.created_by = :teacher_id_sim AND g.is_published = 1 AND (g.class_name = :kelas_sim OR g.class_name IS NULL)) AS total_games'
+            (SELECT COUNT(*) FROM word_search_games g WHERE g.created_by = :teacher_id_word AND g.is_published = 1 AND (g.class_name = :kelas_word OR g.class_name IS NULL)) AS total_games'
     );
     $publishedGameCountStmt->execute([
         'teacher_id_match' => $userId,
         'kelas_match' => $kelas,
         'teacher_id_word' => $userId,
         'kelas_word' => $kelas,
-        'teacher_id_sim' => $userId,
-        'kelas_sim' => $kelas,
     ]);
     $publishedGameCount = (int) $publishedGameCountStmt->fetchColumn();
 
@@ -755,7 +751,7 @@ $studentMenus = [
   ['label' => 'Dashboard', 'icon' => 'chart', 'href' => 'dashboard.php', 'active' => true],
     ['label' => 'Materi', 'icon' => 'file', 'href' => 'siswa_materi.php', 'active' => false],
     // ['label' => 'Games', 'icon' => 'beaker', 'href' => 'siswa_games.php', 'active' => false],
-    ['label' => 'Kuis PG', 'icon' => 'stack', 'href' => 'siswa_quiz.php', 'active' => false],
+    // ['label' => 'Kuis PG', 'icon' => 'stack', 'href' => 'siswa_quiz.php', 'active' => false],
     ['label' => 'Exercise', 'icon' => 'edit', 'href' => 'siswa_essay.php', 'active' => false],
     ['label' => 'Forum Diskusi', 'icon' => 'chat', 'href' => 'siswa_forum.php', 'active' => false],
     ['label' => 'Profil', 'icon' => 'user', 'href' => 'siswa_profil.php', 'active' => false],
@@ -771,7 +767,7 @@ $studentMenus = [
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="assets/css/style.css">
+    <link rel="stylesheet" href="assets/css/style.css?v=<?= filemtime(__DIR__ . '/assets/css/style.css') ?>">
 </head>
 <body class="dashboard-page">
 <?php if ($role === 'guru'): ?>
@@ -796,6 +792,7 @@ $studentMenus = [
         <div class="guru-menu-block">
             <span class="guru-menu-title">MENU</span>
             <nav class="guru-menu-list">
+                <a class="guru-menu-item" href="phet_viewer.php"><?= chemnama_icon('beaker', '#6b7280'); ?><span>Simulasi PhET</span></a>
                 <?php foreach ($guruMenus as $menu): ?>
                     <a class="guru-menu-item <?= $menu['active'] ? 'is-active' : ''; ?>" href="<?= chemnama_e($menu['href']); ?>">
                         <?= chemnama_icon($menu['icon'], $menu['active'] ? '#0f9d58' : '#6b7280'); ?>
@@ -851,9 +848,10 @@ $studentMenus = [
                 <h3>Keaktifan Rata-rata per Modul</h3>
                 <div class="module-chart">
                     <?php foreach ($moduleScore as $index => $score): ?>
+                        <?php $moduleColor = $moduleColors[$index % count($moduleColors)]; ?>
                         <div class="chart-col">
-                            <strong style="color: <?= chemnama_e($moduleColors[$index]); ?>;"><?= chemnama_e((string) $score); ?>%</strong>
-                            <span class="chart-bar" style="height: <?= 90 + min(160, (int) ($score * 2)); ?>px; background: <?= chemnama_e($moduleColors[$index]); ?>;"></span>
+                            <strong style="color: <?= chemnama_e($moduleColor); ?>;"><?= chemnama_e((string) $score); ?>%</strong>
+                            <span class="chart-bar" style="height: <?= max(4, min(180, (int) ($score * 1.8))); ?>px; background: <?= chemnama_e($moduleColor); ?>;"></span>
                             <small>M<?= $index + 1; ?></small>
                             <small><?= (int) ($moduleParticipants[$index] ?? 0); ?> siswa aktif</small>
                         </div>
@@ -867,10 +865,10 @@ $studentMenus = [
                     <?php if (!empty($topStudents)): ?>
                         <?php foreach ($topStudents as $idx => $student): ?>
                             <div class="rank-row">
-                                <span class="rank-num <?= $idx < 3 ? 'top' : ''; ?>\"><?= $idx + 1; ?></span>
-                                <span class="rank-avatar\"><?= chemnama_e($student['initial']); ?></span>
-                                <span class="rank-name\"><?= chemnama_e($student['name']); ?></span>
-                                <strong class="rank-score\"><?= chemnama_e((string) $student['score']); ?>%</strong>
+                                <span class="rank-num <?= $idx < 3 ? 'top' : ''; ?>"><?= $idx + 1; ?></span>
+                                <span class="rank-avatar"><?= chemnama_e($student['initial']); ?></span>
+                                <span class="rank-name"><?= chemnama_e($student['name']); ?></span>
+                                <strong class="rank-score"><?= chemnama_e((string) $student['score']); ?>%</strong>
                             </div>
                         <?php endforeach; ?>
                     <?php else: ?>
@@ -901,7 +899,7 @@ $studentMenus = [
                         </div>
                         <div>
                             <strong><?= chemnama_e((string) $publishedGameCount); ?> Games Aktif</strong>
-                            <p>Tarik Garis, Cari Kata, dan Simulasi yang tersedia.</p>
+                            <p>ChemMatch dan Cari Kata yang tersedia.</p>
                         </div>
                     </div>
                     <div class="panel-item compact-item">
@@ -952,7 +950,7 @@ $studentMenus = [
                         </div>
                         <div>
                             <strong>Pengaturan Games</strong>
-                            <p>Kelola Tarik Garis, Cari Kata, dan Simulasi.</p>
+                            <p>Kelola ChemMatch dan Cari Kata.</p>
                         </div>
                     </div>
                 </div>
@@ -982,6 +980,7 @@ $studentMenus = [
         <div class="guru-menu-block">
             <span class="guru-menu-title">MENU</span>
             <nav class="guru-menu-list">
+                <a class="guru-menu-item" href="phet_viewer.php"><?= chemnama_icon('beaker', '#6b7280'); ?><span>Simulasi PhET</span></a>
                 <?php foreach ($studentMenus as $menu): ?>
                     <a class="guru-menu-item <?= $menu['active'] ? 'is-active' : ''; ?>" href="<?= chemnama_e($menu['href']); ?>">
                         <?= chemnama_icon($menu['icon'], $menu['active'] ? '#0f9d58' : '#6b7280'); ?>
@@ -992,7 +991,7 @@ $studentMenus = [
         </div>
 
         <div class="guru-menu-block">
-            <span class="guru-menu-title">AKUN</span>
+            <span class="guru-menu-title">NAVIGASI</span>
             <nav class="guru-menu-list">
                 <a class="guru-menu-item logout" href="logout.php">
                     <?= chemnama_icon('logout', '#ef4444'); ?>
@@ -1152,8 +1151,8 @@ $studentMenus = [
                                 $summaryTotal = max($totalQuestions, (int) $attemptSummary['last_total_questions']);
                                 $buttonLabel = $hasSubmittedAttempt ? 'Lihat Hasil' : 'Mulai Quiz';
                                 $buttonHref = $hasSubmittedAttempt
-                                    ? 'siswa_materi.php?quiz_set_id=' . $quizSetId . '&complete=1'
-                                    : 'siswa_materi.php?quiz_set_id=' . $quizSetId;
+                                    ? 'siswa_quiz.php?quiz_set_id=' . $quizSetId . '&complete=1'
+                                    : 'siswa_quiz.php?quiz_set_id=' . $quizSetId;
                             ?>
                             <div class="panel-item compact-item quiz-compact-item">
                                 <div class="panel-icon" style="color:#0f9d58;">
@@ -1187,6 +1186,6 @@ $studentMenus = [
     </section>
 </main>
 <?php endif; ?>
-<script src="assets/js/app.js?v=20260407"></script>
+<script src="assets/js/app.js?v=<?= filemtime(__DIR__ . '/assets/js/app.js') ?>"></script>
 </body>
 </html>

@@ -56,7 +56,7 @@ if ($action === 'save_task') {
         if ($taskId > 0) {
             $update = $pdo->prepare(
                 'UPDATE essay_tasks
-                 SET module_id = :module_id, class_name = :class_name, prompt_text = :prompt_text, due_at = :due_at
+                 SET module_id = :module_id, class_name = IF(class_name IS NULL, NULL, :class_name), prompt_text = :prompt_text, due_at = :due_at
                  WHERE id = :id AND created_by = :created_by'
             );
             $update->execute([
@@ -93,7 +93,7 @@ if ($action === 'save_task') {
 if ($action === 'delete_task') {
     $taskId = (int) ($_POST['task_id'] ?? 0);
     if ($taskId > 0) {
-        $delete = $pdo->prepare('DELETE FROM essay_tasks WHERE id = :id AND created_by = :created_by AND class_name = :class_name');
+        $delete = $pdo->prepare('DELETE FROM essay_tasks WHERE id = :id AND created_by = :created_by AND (class_name = :class_name OR class_name IS NULL)');
         $delete->execute(['id' => $taskId, 'created_by' => $user['id'], 'class_name' => $activeClass]);
         chemnama_flash('Tugas essay berhasil dihapus.', 'success');
     }
@@ -127,7 +127,7 @@ if ($action === 'grade_answer') {
              JOIN essay_tasks t ON t.id = a.task_id
              JOIN user_profiles up_student ON up_student.user_id = a.student_id
              WHERE a.id = :answer_id AND t.created_by = :created_by
-                            AND t.class_name = :task_class
+                            AND (t.class_name = :task_class OR t.class_name IS NULL)
                              AND up_student.kelas = :student_class
              LIMIT 1'
         );
@@ -166,7 +166,7 @@ $selectedModule = (int) ($_GET['module'] ?? 0);
 
 $taskEditing = null;
 if ($editId > 0) {
-    $editStmt = $pdo->prepare('SELECT * FROM essay_tasks WHERE id = :id AND created_by = :created_by AND class_name = :class_name LIMIT 1');
+    $editStmt = $pdo->prepare('SELECT * FROM essay_tasks WHERE id = :id AND created_by = :created_by AND (class_name = :class_name OR class_name IS NULL) LIMIT 1');
         $editStmt->execute(['id' => $editId, 'created_by' => $user['id'], 'class_name' => $activeClass]);
     $taskEditing = $editStmt->fetch();
 
@@ -180,7 +180,7 @@ $taskStmt = $pdo->prepare(
      FROM essay_tasks t
      JOIN modules m ON m.id = t.module_id
      WHERE t.created_by = :created_by
-             AND t.class_name = :class_name
+             AND (t.class_name = :class_name OR t.class_name IS NULL)
      ORDER BY t.created_at DESC'
 );
 $taskStmt->execute(['created_by' => $user['id'], 'class_name' => $activeClass]);
@@ -190,7 +190,7 @@ $countStmt = $pdo->prepare(
         'SELECT module_id, COUNT(*) AS total
          FROM essay_tasks
          WHERE created_by = :created_by
-                AND class_name = :class_name
+                AND (class_name = :class_name OR class_name IS NULL)
          GROUP BY module_id'
 );
 $countStmt->execute(['created_by' => $user['id'], 'class_name' => $activeClass]);
@@ -212,7 +212,7 @@ $answerStmt = $pdo->prepare(
      JOIN user_profiles up_student ON up_student.user_id = u.id
      WHERE t.created_by = :created_by
        AND up_student.kelas = :student_class
-             AND t.class_name = :task_class
+             AND (t.class_name = :task_class OR t.class_name IS NULL)
      ORDER BY a.updated_at DESC'
 );
 $answerStmt->execute([
@@ -279,7 +279,7 @@ $guruMenus = [
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="assets/css/style.css">
+    <link rel="stylesheet" href="assets/css/style.css?v=<?= filemtime(__DIR__ . '/assets/css/style.css') ?>">
     <style>
         .forum-calendar-menu {
             padding: 10px;
@@ -398,6 +398,7 @@ $guruMenus = [
         <div class="guru-menu-block">
             <span class="guru-menu-title">MENU</span>
             <nav class="guru-menu-list">
+                <a class="guru-menu-item" href="phet_viewer.php"><?= chemnama_icon('beaker', '#6b7280'); ?><span>Simulasi PhET</span></a>
                 <?php foreach ($guruMenus as $menu): ?>
                     <a class="guru-menu-item <?= $menu['active'] ? 'is-active' : ''; ?>" href="<?= chemnama_e($menu['href']); ?>">
                         <?= chemnama_icon($menu['icon'], $menu['active'] ? '#0f9d58' : '#6b7280'); ?>
@@ -604,7 +605,7 @@ $guruMenus = [
     </section>
 </main>
 
-<script src="assets/js/app.js?v=20260407"></script>
+<script src="assets/js/app.js?v=<?= filemtime(__DIR__ . '/assets/js/app.js') ?>"></script>
 <script>
     // Guru custom selects handler
     (function(){

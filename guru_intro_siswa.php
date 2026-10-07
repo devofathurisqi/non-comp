@@ -124,7 +124,7 @@ $guruMenus = [
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="assets/css/style.css">
+    <link rel="stylesheet" href="assets/css/style.css?v=<?= filemtime(__DIR__ . '/assets/css/style.css') ?>">
     <style>
         .intro-preview-box {
             background: rgba(30, 41, 59, 0.5);
@@ -185,6 +185,7 @@ $guruMenus = [
         <div class="guru-menu-block">
             <span class="guru-menu-title">MENU</span>
             <nav class="guru-menu-list">
+                <a class="guru-menu-item" href="phet_viewer.php"><?= chemnama_icon('beaker', '#6b7280'); ?><span>Simulasi PhET</span></a>
                 <?php foreach ($guruMenus as $menu): ?>
                     <a class="guru-menu-item <?= $menu['active'] ? 'is-active' : ''; ?>" href="<?= chemnama_e($menu['href']); ?>">
                         <?= chemnama_icon($menu['icon'], $menu['active'] ? '#0f9d58' : '#6b7280'); ?>
@@ -310,36 +311,6 @@ $guruMenus = [
         </div>
     </section>
 </main>
-<script>
-    // Sidebar toggle (mobile) — update `.guru-page` class to match CSS rules
-    (function(){
-        const toggle = document.querySelector('[data-guru-sidebar-toggle]');
-        const overlay = document.querySelector('[data-guru-sidebar-overlay]');
-        const guruPage = document.querySelector('.guru-page');
-
-        function openSidebar() {
-            if (!guruPage) return;
-            guruPage.classList.add('is-sidebar-open');
-            if (toggle) toggle.setAttribute('aria-expanded', 'true');
-        }
-
-        function closeSidebar() {
-            if (!guruPage) return;
-            guruPage.classList.remove('is-sidebar-open');
-            if (toggle) toggle.setAttribute('aria-expanded', 'false');
-        }
-
-        toggle?.addEventListener('click', function (e) {
-            e.preventDefault();
-            const mobileOnly = window.matchMedia('(max-width: 1080px)').matches;
-            if (!mobileOnly) return;
-            if (guruPage.classList.contains('is-sidebar-open')) closeSidebar();
-            else openSidebar();
-        });
-
-        overlay?.addEventListener('click', function () {
-            closeSidebar();
-        });
-    })();
-</script>
+<script src="assets/js/app.js?v=<?= filemtime(__DIR__ . '/assets/js/app.js') ?>"></script>
+</body>
 </html>

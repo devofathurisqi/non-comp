@@ -1,9 +1,42 @@
 <?php
 declare(strict_types=1);
+function chemnama_youtube_embed_url(?string $url): ?string
+{
+    $parts = parse_url(trim((string) $url));
+    if (!is_array($parts) || !in_array(strtolower($parts['scheme'] ?? ''), ['http', 'https'], true)) return null;
+    $host = strtolower($parts['host'] ?? '');
+    $path = $parts['path'] ?? '';
+    $id = null;
+    if ($host === 'youtu.be') {
+        $id = trim($path, '/');
+    } elseif (in_array($host, ['youtube.com', 'www.youtube.com', 'm.youtube.com', 'youtube-nocookie.com', 'www.youtube-nocookie.com'], true)) {
+        if ($path === '/watch') {
+            parse_str($parts['query'] ?? '', $query);
+            $id = $query['v'] ?? null;
+        } elseif (preg_match('~^/(?:embed|shorts|live)/([^/]+)/?$~', $path, $match)) {
+            $id = $match[1];
+        }
+    }
+    return is_string($id) && preg_match('/^[A-Za-z0-9_-]{11}$/D', $id)
+        ? 'https://www.youtube.com/embed/' . $id : null;
+}
+function chemnama_env(string $name): string|false
+{
+    $value = getenv($name);
+    return $value !== false ? $value : ($_ENV[$name] ?? false);
+}
 
 function chemnama_start_session(): void
 {
     if (session_status() !== PHP_SESSION_ACTIVE) {
+        ini_set('session.use_strict_mode', '1');
+        ini_set('session.use_only_cookies', '1');
+        session_set_cookie_params([
+            'httponly' => true,
+            'secure' => (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || chemnama_env('CHEMNAMA_SESSION_SECURE') === '1',
+            'samesite' => 'Lax',
+            'path' => '/',
+        ]);
         session_start();
     }
 }
@@ -27,7 +60,21 @@ function chemnama_home_data(PDO $pdo): array
 
 function chemnama_current_user(): ?array
 {
-    return $_SESSION['user'] ?? null;
+    global $pdo;
+    if (empty($_SESSION['user']) || !($pdo instanceof PDO)) {
+        return null;
+    }
+    $stmt = $pdo->prepare('SELECT id, name, email, role, login_id, avatar_color, avatar_path, password_hash FROM users WHERE id = :id');
+    $stmt->execute(['id' => (int) $_SESSION['user']['id']]);
+    $user = $stmt->fetch();
+    if (!$user || time() - (int) ($_SESSION['auth_last_activity'] ?? 0) > 7200
+        || !hash_equals((string) ($_SESSION['auth_fingerprint'] ?? ''), hash('sha256', $user['password_hash']))) {
+        unset($_SESSION['user'], $_SESSION['auth_fingerprint'], $_SESSION['guru_active_class']);
+        return null;
+    }
+    unset($user['password_hash']);
+    $_SESSION['auth_last_activity'] = time();
+    return $_SESSION['user'] = $user;
 }
 
 function chemnama_is_demo_user(?array $user): bool
@@ -79,10 +126,10 @@ function chemnama_role_login_label(string $role): string
 function chemnama_role_access_code(string $role): string
 {
     if ($role === 'guru') {
-        return (string) (getenv('CHEMNAMA_GURU_ACCESS_CODE') ?: 'GURU2026');
+        return (string) (chemnama_env('CHEMNAMA_GURU_ACCESS_CODE') ?: '');
     }
 
-    return (string) (getenv('CHEMNAMA_SISWA_ACCESS_CODE') ?: 'SISWA2026');
+    return (string) (chemnama_env('CHEMNAMA_SISWA_ACCESS_CODE') ?: '');
 }
 
 function chemnama_normalize_login_id(string $loginId): string

@@ -21,7 +21,7 @@ foreach ($modules as $module) {
     $moduleMap[(int) $module['id']] = $module;
 }
 
-$quizSetsStmt = $pdo->prepare('SELECT id, module_id, title, is_published FROM quiz_sets WHERE created_by = ? AND class_name = ? ORDER BY sort_order, id');
+$quizSetsStmt = $pdo->prepare('SELECT id, module_id, title, is_published FROM quiz_sets WHERE created_by = ? AND (class_name = ? OR class_name IS NULL) ORDER BY sort_order, id');
 $quizSetsStmt->execute([$user['id'], $activeClass]);
 $quizSets = $quizSetsStmt->fetchAll();
 $quizSetMap = [];
@@ -52,7 +52,7 @@ if ($action === 'delete') {
             $stmt = $pdo->prepare(
                 'DELETE q FROM questions q
                  JOIN quiz_sets qs ON qs.id = q.quiz_set_id
-                 WHERE q.id = ? AND q.created_by = ? AND qs.class_name = ?'
+                 WHERE q.id = ? AND q.created_by = ? AND (qs.class_name = ? OR qs.class_name IS NULL)'
             );
             $stmt->execute([$questionId, $user['id'], $activeClass]);
             $success = true;
@@ -110,7 +110,7 @@ if ($action === 'delete') {
                 $stmt = $pdo->prepare(
                     'UPDATE questions SET module_id = ?, quiz_set_id = ?, question_text = ?, option_a = ?, option_b = ?, 
                      option_c = ?, option_d = ?, correct_option = ?, difficulty = ?, points = ?, 
-                     updated_at = CURRENT_TIMESTAMP WHERE id = ? AND created_by = ? AND quiz_set_id IN (SELECT id FROM quiz_sets WHERE created_by = ? AND class_name = ?)'
+                     updated_at = CURRENT_TIMESTAMP WHERE id = ? AND created_by = ? AND quiz_set_id IN (SELECT id FROM quiz_sets WHERE created_by = ? AND (class_name = ? OR class_name IS NULL))'
                 );
                 $stmt->execute([
                     $moduleId, $quizSetId, $questionText, $optionA, $optionB, $optionC, $optionD,
@@ -157,7 +157,7 @@ if ($mode === 'edit' && $editId > 0) {
         'SELECT q.*
          FROM questions q
          JOIN quiz_sets qs ON qs.id = q.quiz_set_id
-         WHERE q.id = ? AND q.created_by = ? AND qs.class_name = ?'
+         WHERE q.id = ? AND q.created_by = ? AND (qs.class_name = ? OR qs.class_name IS NULL)'
     );
     $stmt->execute([$editId, $user['id'], $activeClass]);
     $editData = $stmt->fetch();
@@ -174,7 +174,7 @@ $moduleCountStmt = $pdo->prepare(
      FROM questions q
      LEFT JOIN quiz_sets qs ON qs.id = q.quiz_set_id
      WHERE q.created_by = ?
-    AND qs.class_name = ?
+    AND (qs.class_name = ? OR qs.class_name IS NULL)
      GROUP BY COALESCE(qs.module_id, q.module_id)'
 );
 $moduleCountStmt->execute([$user['id'], $activeClass]);
@@ -191,7 +191,7 @@ $query = 'SELECT q.*, COALESCE(qs.module_id, q.module_id) AS effective_module_id
           LEFT JOIN quiz_sets qs ON qs.id = q.quiz_set_id
           JOIN modules m ON m.id = COALESCE(qs.module_id, q.module_id)
           JOIN users u ON u.id = q.created_by
-          WHERE q.created_by = ? AND qs.class_name = ?';
+          WHERE q.created_by = ? AND (qs.class_name = ? OR qs.class_name IS NULL)';
 $params = [$user['id'], $activeClass];
 if ($selectedQuizSetId > 0 && $mode !== 'list') {
     $query .= ' AND q.quiz_set_id = ?';
@@ -219,7 +219,7 @@ if ($flash) {
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="assets/css/style.css">
+    <link rel="stylesheet" href="assets/css/style.css?v=<?= filemtime(__DIR__ . '/assets/css/style.css') ?>">
 </head>
 <body class="dashboard-page">
 <main class="guru-page">
@@ -243,6 +243,7 @@ if ($flash) {
         <div class="guru-menu-block">
             <span class="guru-menu-title">MENU</span>
             <nav class="guru-menu-list">
+                <a class="guru-menu-item" href="phet_viewer.php"><?= chemnama_icon('beaker', '#6b7280'); ?><span>Simulasi PhET</span></a>
                 <?php 
                     $guruMenus = [
                     ['label' => 'Dashboard', 'icon' => 'chart', 'href' => 'dashboard.php', 'active' => false],
@@ -581,7 +582,7 @@ if ($flash) {
     </section>
 </main>
 
-<script src="assets/js/app.js?v=20260407"></script>
+<script src="assets/js/app.js?v=<?= filemtime(__DIR__ . '/assets/js/app.js') ?>"></script>
 <script>
     // Guru custom selects handler
     (function(){

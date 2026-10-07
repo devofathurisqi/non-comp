@@ -54,13 +54,13 @@ function chemnama_send_reset_code_email(string $email, string $name, string $res
         'Jika Anda tidak meminta reset password, abaikan email ini.',
     ]);
 
-    $smtpHost = trim((string) (getenv('CHEMNAMA_SMTP_HOST') ?: ''));
-    $smtpPort = (int) (getenv('CHEMNAMA_SMTP_PORT') ?: 2525);
-    $smtpUsername = trim((string) (getenv('CHEMNAMA_SMTP_USERNAME') ?: ''));
-    $smtpPassword = trim((string) (getenv('CHEMNAMA_SMTP_PASSWORD') ?: ''));
-    $smtpEncryption = strtolower(trim((string) (getenv('CHEMNAMA_SMTP_ENCRYPTION') ?: 'tls')));
-    $fromEmail = trim((string) (getenv('CHEMNAMA_SMTP_FROM_EMAIL') ?: 'no-reply@nomcomp.local'));
-    $fromName = trim((string) (getenv('CHEMNAMA_SMTP_FROM_NAME') ?: 'Nom Comp Support'));
+    $smtpHost = trim((string) (chemnama_env('CHEMNAMA_SMTP_HOST') ?: ''));
+    $smtpPort = (int) (chemnama_env('CHEMNAMA_SMTP_PORT') ?: 2525);
+    $smtpUsername = trim((string) (chemnama_env('CHEMNAMA_SMTP_USERNAME') ?: ''));
+    $smtpPassword = trim((string) (chemnama_env('CHEMNAMA_SMTP_PASSWORD') ?: ''));
+    $smtpEncryption = strtolower(trim((string) (chemnama_env('CHEMNAMA_SMTP_ENCRYPTION') ?: 'tls')));
+    $fromEmail = trim((string) (chemnama_env('CHEMNAMA_SMTP_FROM_EMAIL') ?: 'no-reply@nomcomp.local'));
+    $fromName = trim((string) (chemnama_env('CHEMNAMA_SMTP_FROM_NAME') ?: 'Nom Comp Support'));
 
     // Gmail App Password is often copied with spaces (e.g. xxxx xxxx xxxx xxxx).
     $smtpPassword = str_replace(' ', '', $smtpPassword);
@@ -143,15 +143,12 @@ $role = in_array($role, ['guru', 'siswa'], true) ? $role : 'siswa';
 $roleLabel = chemnama_role_label($role);
 $roleExample = $role === 'guru' ? '198712102010011001' : '22004567';
 $maskedEmail = (string) ($_SESSION['forgot_user_email'] ?? '');
-$hasSmtpCredentials = trim((string) (getenv('CHEMNAMA_SMTP_HOST') ?: '')) !== ''
-    && trim((string) (getenv('CHEMNAMA_SMTP_USERNAME') ?: '')) !== ''
-    && trim((string) (getenv('CHEMNAMA_SMTP_PASSWORD') ?: '')) !== '';
-$hostName = strtolower((string) ($_SERVER['HTTP_HOST'] ?? ''));
-$isLocalhost = in_array($hostName, ['localhost', '127.0.0.1', '::1'], true)
-    || (string) (getenv('CHEMNAMA_DEBUG_MODE') ?: '0') === '1'
-    || strpos($hostName, 'localhost') !== false
-    || strpos($hostName, 'xampp') !== false;
-$showCodeInBrowser = $isLocalhost && !$hasSmtpCredentials;
+$hasSmtpCredentials = trim((string) (chemnama_env('CHEMNAMA_SMTP_HOST') ?: '')) !== ''
+    && trim((string) (chemnama_env('CHEMNAMA_SMTP_USERNAME') ?: '')) !== ''
+    && trim((string) (chemnama_env('CHEMNAMA_SMTP_PASSWORD') ?: '')) !== '';
+$showCodeInBrowser = chemnama_env('CHEMNAMA_DEBUG_MODE') === '1'
+    && in_array($_SERVER['REMOTE_ADDR'] ?? '', ['127.0.0.1', '::1'], true)
+    && !$hasSmtpCredentials;
 $debugResetCode = null;
 
 if (isset($_GET['role'])) {
@@ -169,6 +166,11 @@ if (isset($_SESSION['forgot_reset_code_hash'], $_SESSION['forgot_reset_expires_a
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    chemnama_validate_csrf();
+    if (!chemnama_auth_attempt($pdo, 'reset', (string) ($_POST['login_id'] ?? $_SESSION['forgot_user_id'] ?? 'unknown'))) {
+        http_response_code(429);
+        exit('Terlalu banyak percobaan reset. Tunggu 15 menit.');
+    }
     if (isset($_POST['request_code'])) {
         $role = (string) ($_SESSION['forgot_role'] ?? $role);
         $loginId = chemnama_normalize_login_id((string) ($_POST['login_id'] ?? ''));
@@ -246,8 +248,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $error = 'Kode verifikasi tidak sesuai.';
             $step = 2;
             $maskedEmail = chemnama_mask_email_address((string) ($_SESSION['forgot_user_email'] ?? ''));
-        } elseif ($newPassword === '' || strlen($newPassword) < 6) {
-            $error = 'Password baru minimal 6 karakter.';
+        } elseif ($newPassword === '' || strlen($newPassword) < 8 || strlen($newPassword) > 72) {
+            $error = 'Password baru harus 8–72 karakter.';
             $step = 2;
             $maskedEmail = chemnama_mask_email_address((string) ($_SESSION['forgot_user_email'] ?? ''));
         } elseif ($newPassword !== $confirmPassword) {
@@ -284,7 +286,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="assets/css/style.css">
+    <link rel="stylesheet" href="assets/css/style.css?v=<?= filemtime(__DIR__ . '/assets/css/style.css') ?>">
     <style>
         .forgot-wrapper {
             min-height: 100vh;
@@ -553,6 +555,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <?php if ($step === 1): ?>
                 <div class="step-indicator">Langkah 1 dari 2 • <?= chemnama_e($roleLabel); ?></div>
                 <form method="post" class="forgot-form is-active">
+                <input type="hidden" name="csrf_token" value="<?= chemnama_e(chemnama_csrf_token()); ?>">
                     <label>
                         <span><?= chemnama_e($roleLabel); ?></span>
                         <input type="text" name="login_id" placeholder="Masukkan <?= chemnama_e(strtolower($roleLabel)); ?> Anda" required>
@@ -566,6 +569,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     Kode reset sudah dikirim ke email terdaftar: <strong><?= chemnama_e($maskedEmail); ?></strong>
                 </div>
                 <form method="post" class="forgot-form is-active">
+                <input type="hidden" name="csrf_token" value="<?= chemnama_e(chemnama_csrf_token()); ?>">
                     <div class="code-grid">
                         <label>
                             <span>Kode Verifikasi</span>

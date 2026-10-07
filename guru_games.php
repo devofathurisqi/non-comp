@@ -32,24 +32,6 @@ foreach ($modules as $module) {
 $errors = [];
 $action = (string) ($_POST['action'] ?? '');
 
-if ($action === 'delete_simulation') {
-    $simulationId = (int) ($_POST['simulation_id'] ?? 0);
-    if ($simulationId > 0) {
-        $check = $pdo->prepare('SELECT id FROM simulations WHERE id = :id AND created_by = :created_by LIMIT 1');
-        $check->execute(['id' => $simulationId, 'created_by' => $user['id']]);
-        $row = $check->fetch();
-
-        if ($row) {
-            $delete = $pdo->prepare('DELETE FROM simulations WHERE id = :id');
-            $delete->execute(['id' => $simulationId]);
-            chemnama_flash('Simulasi berhasil dihapus.', 'success');
-        }
-    }
-
-    header('Location: guru_games.php');
-    exit;
-}
-
 if ($action === 'save_match') {
     $matchId = (int) ($_POST['match_id'] ?? 0);
     $moduleId = (int) ($_POST['module_id'] ?? 0);
@@ -161,131 +143,7 @@ if ($action === 'delete_word') {
     exit;
 }
 
-if ($action === 'save_simulation') {
-    $simulationId = (int) ($_POST['simulation_id'] ?? 0);
-    $moduleId = (int) ($_POST['module_id'] ?? 0);
-    $atomFirst = trim((string) ($_POST['atom_first'] ?? ''));
-    $atomSecond = trim((string) ($_POST['atom_second'] ?? ''));
-    $productFormula = trim((string) ($_POST['product_formula'] ?? ''));
-    $productName = trim((string) ($_POST['product_name'] ?? ''));
-    $bondType = trim((string) ($_POST['bond_type'] ?? ''));
-    $moleculeLayout = trim((string) ($_POST['molecule_layout'] ?? ''));
-    $reactionEnergy = trim((string) ($_POST['reaction_energy'] ?? ''));
-    $reactionType = trim((string) ($_POST['reaction_type'] ?? ''));
-    $introDescription = trim((string) ($_POST['intro_description'] ?? ''));
-    $descriptionAbout = trim((string) ($_POST['description_about'] ?? ''));
-    $foundIn = trim((string) ($_POST['found_in'] ?? ''));
-    $dailyUsage = trim((string) ($_POST['daily_usage'] ?? ''));
-
-    if (!isset($moduleMap[$moduleId])) {
-        $errors[] = 'Modul wajib dipilih.';
-    }
-
-    if ($atomFirst === '' || $atomSecond === '' || $productFormula === '' || $productName === '') {
-        $errors[] = 'Atom Pertama, Atom Kedua, Rumus Produk, dan Nama Produk wajib diisi.';
-    }
-
-    $existing = null;
-    if ($simulationId > 0) {
-        $check = $pdo->prepare('SELECT * FROM simulations WHERE id = :id AND created_by = :created_by LIMIT 1');
-        $check->execute(['id' => $simulationId, 'created_by' => $user['id']]);
-        $existing = $check->fetch();
-        if (!$existing) {
-            $errors[] = 'Data simulasi tidak ditemukan.';
-        }
-    }
-
-    if (count($errors) === 0) {
-        if ($simulationId > 0) {
-            $update = $pdo->prepare(
-                'UPDATE simulations SET
-                    module_id = :module_id,
-                    atom_first = :atom_first,
-                    atom_second = :atom_second,
-                    product_formula = :product_formula,
-                    product_name = :product_name,
-                    bond_type = :bond_type,
-                    molecule_layout = :molecule_layout,
-                    reaction_energy = :reaction_energy,
-                    reaction_type = :reaction_type,
-                    intro_description = :intro_description,
-                    description_about = :description_about,
-                    found_in = :found_in,
-                    daily_usage = :daily_usage
-                 WHERE id = :id AND created_by = :created_by'
-            );
-            $update->execute([
-                'module_id' => $moduleId,
-                'atom_first' => $atomFirst,
-                'atom_second' => $atomSecond,
-                'product_formula' => $productFormula,
-                'product_name' => $productName,
-                'bond_type' => $bondType,
-                'molecule_layout' => $moleculeLayout,
-                'reaction_energy' => $reactionEnergy,
-                'reaction_type' => $reactionType,
-                'intro_description' => $introDescription !== '' ? $introDescription : null,
-                'description_about' => $descriptionAbout,
-                'found_in' => $foundIn,
-                'daily_usage' => $dailyUsage,
-                'id' => $simulationId,
-                'created_by' => $user['id'],
-            ]);
-
-            chemnama_flash('Simulasi berhasil diperbarui.', 'success');
-        } else {
-            $insert = $pdo->prepare(
-                'INSERT INTO simulations (
-                    module_id, created_by, class_name,
-                    atom_first, atom_second, product_formula, product_name, bond_type,
-                    molecule_layout, reaction_energy, reaction_type, intro_description, description_about,
-                    found_in, daily_usage
-                 ) VALUES (
-                    :module_id, :created_by, :class_name,
-                    :atom_first, :atom_second, :product_formula, :product_name, :bond_type,
-                    :molecule_layout, :reaction_energy, :reaction_type, :intro_description, :description_about,
-                    :found_in, :daily_usage
-                 )'
-            );
-            $insert->execute([
-                'module_id' => $moduleId,
-                'created_by' => $user['id'],
-                'class_name' => $activeClass,
-                'atom_first' => $atomFirst,
-                'atom_second' => $atomSecond,
-                'product_formula' => $productFormula,
-                'product_name' => $productName,
-                'bond_type' => $bondType,
-                'molecule_layout' => $moleculeLayout,
-                'reaction_energy' => $reactionEnergy,
-                'reaction_type' => $reactionType,
-                'intro_description' => $introDescription !== '' ? $introDescription : null,
-                'description_about' => $descriptionAbout,
-                'found_in' => $foundIn,
-                'daily_usage' => $dailyUsage,
-            ]);
-
-            chemnama_flash('Simulasi berhasil ditambahkan.', 'success');
-        }
-
-        header('Location: guru_games.php');
-        exit;
-    }
-}
-
-$mode = (string) ($_GET['mode'] ?? 'list-simulasi');
-$simulationEditId = (int) ($_GET['edit_sim'] ?? 0);
-
-$simulationEditing = null;
-if ($simulationEditId > 0) {
-    $qEditSim = $pdo->prepare('SELECT * FROM simulations WHERE id = :id AND created_by = :created_by LIMIT 1');
-    $qEditSim->execute(['id' => $simulationEditId, 'created_by' => $user['id']]);
-    $simulationEditing = $qEditSim->fetch();
-    if (!$simulationEditing) {
-        $simulationEditId = 0;
-    }
-}
-
+$mode = (string) ($_GET['mode'] ?? 'list-match');
 $classStudentCountStmt = $pdo->prepare(
     'SELECT COUNT(*)
      FROM users u
@@ -294,86 +152,6 @@ $classStudentCountStmt = $pdo->prepare(
 );
 $classStudentCountStmt->execute(['kelas' => $activeClass]);
 $totalClassStudents = (int) $classStudentCountStmt->fetchColumn();
-
-$simulationListSql = 'SELECT s.*, mo.badge AS module_badge, mo.title AS module_title, u.name AS teacher_name,
-                 COALESCE(sr_summary.read_count, 0) AS read_count,
-                 COALESCE(sr_summary.read_students, "") AS read_students,
-                 COALESCE(class_students_summary.class_students, "") AS class_students
-             FROM simulations s
-             JOIN modules mo ON mo.id = s.module_id
-             JOIN users u ON u.id = s.created_by
-             LEFT JOIN (
-                 SELECT sr.simulation_id,
-                        COUNT(DISTINCT sr.student_id) AS read_count,
-                        GROUP_CONCAT(
-                            DISTINCT CONCAT(u_read.name, "::", DATE_FORMAT(sr.read_at, "%Y-%m-%d %H:%i:%s"))
-                            ORDER BY u_read.name SEPARATOR "||"
-                        ) AS read_students
-                 FROM simulation_reads sr
-                 JOIN users u_read ON u_read.id = sr.student_id AND u_read.role = "siswa"
-                 JOIN user_profiles up_read ON up_read.user_id = sr.student_id AND up_read.kelas = :active_class_simulation
-                 GROUP BY sr.simulation_id
-             ) sr_summary ON sr_summary.simulation_id = s.id
-             LEFT JOIN (
-                SELECT up_class.kelas,
-                       GROUP_CONCAT(DISTINCT u_class.name ORDER BY u_class.name SEPARATOR "||") AS class_students
-                FROM user_profiles up_class
-                JOIN users u_class ON u_class.id = up_class.user_id AND u_class.role = "siswa"
-                     WHERE up_class.kelas = :active_class_simulation_join_sub
-                GROUP BY up_class.kelas
-             ) class_students_summary ON class_students_summary.kelas = :active_class_simulation_join
-             WHERE s.created_by = :created_by
-             ORDER BY s.created_at DESC';
-$simulationListStmt = $pdo->prepare($simulationListSql);
-$simulationListStmt->execute([
-    'created_by' => $user['id'],
-    'active_class_simulation' => $activeClass,
-    'active_class_simulation_join' => $activeClass,
-    'active_class_simulation_join_sub' => $activeClass,
-]);
-$simulations = $simulationListStmt->fetchAll();
-
-foreach ($simulations as &$simulation) {
-    $classStudentNames = [];
-    $classStudentsRaw = trim((string) ($simulation['class_students'] ?? ''));
-    if ($classStudentsRaw !== '') {
-        $classStudentNames = array_values(array_filter(array_map('trim', explode('||', $classStudentsRaw)), static fn (string $name): bool => $name !== ''));
-    }
-
-    $readEntries = [];
-    $readStudentsRaw = trim((string) ($simulation['read_students'] ?? ''));
-    if ($readStudentsRaw !== '') {
-        foreach (array_values(array_filter(array_map('trim', explode('||', $readStudentsRaw)), static fn (string $entry): bool => $entry !== '')) as $entry) {
-            [$readerName, $readAt] = array_pad(explode('::', $entry, 2), 2, '');
-            $readerName = trim($readerName);
-            $readAt = trim($readAt);
-            if ($readerName === '') {
-                continue;
-            }
-
-            $readEntries[] = [
-                'name' => $readerName,
-                'read_at' => $readAt,
-            ];
-        }
-    }
-
-    $readerNames = array_values(array_unique(array_map(static fn (array $entry): string => (string) ($entry['name'] ?? ''), $readEntries)));
-    $unreadNames = array_values(array_diff($classStudentNames, $readerNames));
-
-    $simulation['read_entries_json'] = json_encode($readEntries, JSON_UNESCAPED_UNICODE);
-    $simulation['unread_students_json'] = json_encode($unreadNames, JSON_UNESCAPED_UNICODE);
-}
-unset($simulation);
-
-$simulationsByModule = [];
-foreach ($simulations as $simulation) {
-    $moduleId = (int) $simulation['module_id'];
-    if (!isset($simulationsByModule[$moduleId])) {
-        $simulationsByModule[$moduleId] = [];
-    }
-    $simulationsByModule[$moduleId][] = $simulation;
-}
 
 $matchEditId = (int) ($_GET['edit_match'] ?? 0);
 $matchEditing = null;
@@ -437,23 +215,6 @@ foreach ($words as $word) {
     $wordsByModule[$moduleId][] = $word;
 }
 
-$simulationFormData = [
-    'simulation_id' => $simulationEditing['id'] ?? 0,
-    'module_id' => (int) ($simulationEditing['module_id'] ?? ($modules[0]['id'] ?? 1)),
-    'atom_first' => (string) ($simulationEditing['atom_first'] ?? ''),
-    'atom_second' => (string) ($simulationEditing['atom_second'] ?? ''),
-    'product_formula' => (string) ($simulationEditing['product_formula'] ?? ''),
-    'product_name' => (string) ($simulationEditing['product_name'] ?? ''),
-    'bond_type' => (string) ($simulationEditing['bond_type'] ?? ''),
-    'molecule_layout' => (string) ($simulationEditing['molecule_layout'] ?? ''),
-    'reaction_energy' => (string) ($simulationEditing['reaction_energy'] ?? ''),
-    'reaction_type' => (string) ($simulationEditing['reaction_type'] ?? ''),
-    'intro_description' => (string) ($simulationEditing['intro_description'] ?? ''),
-    'description_about' => (string) ($simulationEditing['description_about'] ?? ''),
-    'found_in' => (string) ($simulationEditing['found_in'] ?? ''),
-    'daily_usage' => (string) ($simulationEditing['daily_usage'] ?? ''),
-];
-
 $matchFormData = [
     'match_id' => $matchEditing['id'] ?? 0,
     'module_id' => (int) ($matchEditing['module_id'] ?? ($modules[0]['id'] ?? 1)),
@@ -472,7 +233,6 @@ $wordFormData = [
 ];
 
 $flash = chemnama_flash();
-$showSimulationForm = $mode === 'add-simulasi' || $simulationEditId > 0;
 $showMatchForm = $mode === 'add-match' || $matchEditId > 0;
 $showWordForm = $mode === 'add-word' || $wordEditId > 0;
 
@@ -500,7 +260,7 @@ $guruMenus = [
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="assets/css/style.css">
+    <link rel="stylesheet" href="assets/css/style.css?v=<?= filemtime(__DIR__ . '/assets/css/style.css') ?>">
     <style>
         .games-modal-card {
             background: rgba(30, 41, 59, 0.96) !important;
@@ -543,6 +303,7 @@ $guruMenus = [
         <div class="guru-menu-block">
             <span class="guru-menu-title">MENU</span>
             <nav class="guru-menu-list">
+                <a class="guru-menu-item" href="phet_viewer.php"><?= chemnama_icon('beaker', '#6b7280'); ?><span>Simulasi PhET</span></a>
                 <?php foreach ($guruMenus as $menu): ?>
                     <a class="guru-menu-item <?= $menu['active'] ? 'is-active' : ''; ?>" href="<?= chemnama_e($menu['href']); ?>">
                         <?= chemnama_icon($menu['icon'], $menu['active'] ? '#0f9d58' : '#6b7280'); ?>
@@ -571,7 +332,7 @@ $guruMenus = [
         <div class="guru-headline-row">
             <div>
                 <h1>Pengaturan Games</h1>
-                <p>Kelola simulasi, tarik garis, dan cari kata untuk siswa.</p>
+                <p>Kelola ChemMatch dan Cari Kata untuk siswa.</p>
             </div>
         </div>
 
@@ -581,8 +342,7 @@ $guruMenus = [
 
         <div class="games-switcher" data-games-switcher>
             <div class="games-switcher-tabs">
-                <a class="games-switcher-tab is-active" href="#simulasi"><?= chemnama_icon('beaker', '#ffffff'); ?><span>Simulasi</span><span class="games-switcher-count">(<?= (int) $simulationCount; ?>)</span></a>
-                <a class="games-switcher-tab" href="#chem-match"><?= chemnama_icon('stack', '#d8cde9'); ?><span>ChemMatch</span><span class="games-switcher-count">(<?= (int) $matchCount; ?>)</span></a>
+                <a class="games-switcher-tab is-active" href="#chem-match"><?= chemnama_icon('stack', '#d8cde9'); ?><span>ChemMatch</span><span class="games-switcher-count">(<?= (int) $matchCount; ?>)</span></a>
                 <a class="games-switcher-tab" href="#cari-kata"><?= chemnama_icon('search', '#d8cde9'); ?><span>Cari Kata</span><span class="games-switcher-count">(<?= (int) $wordCount; ?>)</span></a>
             </div>
         </div>
@@ -594,232 +354,8 @@ $guruMenus = [
         <?php if (count($errors) > 0): ?>
             <div class="alert alert-error"><?= chemnama_e(implode(' ', $errors)); ?></div>
         <?php endif; ?>
-        
 
-        <section class="guru-panel materi-form-panel games-panel is-active" id="simulasi" style="margin-top: 0;" data-games-panel>
-            <div class="guru-headline-row" style="margin-bottom: 16px;">
-                <div>
-                    <h1 style="font-size: 1.4rem; margin: 0;">Simulasi</h1>
-                    <p>Kelola simulasi reaksi langsung di halaman ini.</p>
-                </div>
-                <div class="guru-head-actions">
-                    <a class="btn btn-primary materi-btn" href="guru_games.php?mode=add-simulasi#simulasi"><?= chemnama_icon('beaker', '#ffffff'); ?> Tambah Simulasi</a>
-                </div>
-            </div>
-
-            <?php if ($showSimulationForm): ?>
-                <article class="guru-panel materi-form-panel" id="simulasi-form">
-                    <h3><?= $simulationEditId > 0 ? 'Edit Simulasi' : 'Tambah Simulasi Baru'; ?></h3>
-                    <form method="post" class="materi-form-grid">
-                        <input type="hidden" name="action" value="save_simulation">
-                        <input type="hidden" name="simulation_id" value="<?= chemnama_e((string) $simulationFormData['simulation_id']); ?>">
-
-                        <label>
-                            <span>Modul</span>
-                            <div class="forum-custom-select" data-guru-custom-select="game_sim_module_id">
-                                <input type="hidden" name="module_id" value="<?= chemnama_e((string) $simulationFormData['module_id']); ?>">
-                                <button class="forum-custom-select-trigger" type="button" aria-haspopup="listbox" aria-expanded="false">
-                                    <?php
-                                        $selectedGameSimModuleLabel = 'Pilih Modul';
-                                        $currentGameSimModuleId = (int) $simulationFormData['module_id'];
-                                        foreach ($modules as $m) {
-                                            if ((int) $m['id'] === $currentGameSimModuleId) {
-                                                $selectedGameSimModuleLabel = $m['badge'] . ' - ' . $m['title'];
-                                                break;
-                                            }
-                                        }
-                                    ?>
-                                    <span class="forum-custom-select-label"><?= chemnama_e($selectedGameSimModuleLabel); ?></span>
-                                    <span class="forum-custom-select-caret" aria-hidden="true"></span>
-                                </button>
-                                <div class="forum-custom-select-menu" role="listbox" hidden>
-                                    <?php foreach ($modules as $module): ?>
-                                        <button class="forum-custom-select-option<?= $currentGameSimModuleId === (int) $module['id'] ? ' is-selected' : ''; ?>" type="button" role="option" data-value="<?= chemnama_e((string) $module['id']); ?>" data-label="<?= chemnama_e($module['badge'] . ' - ' . $module['title']); ?>" aria-selected="<?php echo $currentGameSimModuleId === (int) $module['id'] ? 'true' : 'false'; ?>">
-                                            <?= chemnama_e($module['badge'] . ' - ' . $module['title']); ?>
-                                        </button>
-                                    <?php endforeach; ?>
-                                </div>
-                            </div>
-                        </label>
-
-                        <label>
-                            <span>Atom Pertama</span>
-                            <input type="text" name="atom_first" placeholder="Contoh: H (Hidrogen)" value="<?= chemnama_e($simulationFormData['atom_first']); ?>" required>
-                        </label>
-
-                        <label>
-                            <span>Atom Kedua</span>
-                            <input type="text" name="atom_second" placeholder="Contoh: Cl (Klor)" value="<?= chemnama_e($simulationFormData['atom_second']); ?>" required>
-                        </label>
-
-                        <label>
-                            <span>Rumus Produk</span>
-                            <input type="text" name="product_formula" placeholder="Contoh: HCl" value="<?= chemnama_e($simulationFormData['product_formula']); ?>" required>
-                        </label>
-
-                        <label>
-                            <span>Nama Produk</span>
-                            <input type="text" name="product_name" placeholder="Contoh: Natrium Klorida" value="<?= chemnama_e($simulationFormData['product_name']); ?>" required>
-                        </label>
-
-                        <label>
-                            <span>Jenis Ikatan</span>
-                            <div class="forum-custom-select" data-guru-custom-select="game_sim_bond_type">
-                                <input type="hidden" name="bond_type" value="<?= chemnama_e($simulationFormData['bond_type']); ?>">
-                                <button class="forum-custom-select-trigger" type="button" aria-haspopup="listbox" aria-expanded="false">
-                                    <?php
-                                        $bondTypeLabel = $simulationFormData['bond_type'] ?: 'Pilih Jenis Ikatan';
-                                    ?>
-                                    <span class="forum-custom-select-label"><?= chemnama_e($bondTypeLabel); ?></span>
-                                    <span class="forum-custom-select-caret" aria-hidden="true"></span>
-                                </button>
-                                <div class="forum-custom-select-menu" role="listbox" hidden>
-                                    <button class="forum-custom-select-option<?= $simulationFormData['bond_type'] === 'Ionik' ? ' is-selected' : ''; ?>" type="button" role="option" data-value="Ionik" data-label="Ionik" aria-selected="<?= $simulationFormData['bond_type'] === 'Ionik' ? 'true' : 'false'; ?>">Ionik</button>
-                                    <button class="forum-custom-select-option<?= $simulationFormData['bond_type'] === 'Kovalen Polar' ? ' is-selected' : ''; ?>" type="button" role="option" data-value="Kovalen Polar" data-label="Kovalen Polar" aria-selected="<?= $simulationFormData['bond_type'] === 'Kovalen Polar' ? 'true' : 'false'; ?>">Kovalen Polar</button>
-                                    <button class="forum-custom-select-option<?= $simulationFormData['bond_type'] === 'Kovalen Non-Polar' ? ' is-selected' : ''; ?>" type="button" role="option" data-value="Kovalen Non-Polar" data-label="Kovalen Non-Polar" aria-selected="<?= $simulationFormData['bond_type'] === 'Kovalen Non-Polar' ? 'true' : 'false'; ?>">Kovalen Non-Polar</button>
-                                    <button class="forum-custom-select-option<?= $simulationFormData['bond_type'] === 'Metalik' ? ' is-selected' : ''; ?>" type="button" role="option" data-value="Metalik" data-label="Metalik" aria-selected="<?= $simulationFormData['bond_type'] === 'Metalik' ? 'true' : 'false'; ?>">Metalik</button>
-                                </div>
-                            </div>
-                        </label>
-
-                        <label>
-                            <span>Layout Molekul</span>
-                            <div class="forum-custom-select" data-guru-custom-select="game_sim_molecule_layout">
-                                <input type="hidden" name="molecule_layout" value="<?= chemnama_e($simulationFormData['molecule_layout']); ?>">
-                                <button class="forum-custom-select-trigger" type="button" aria-haspopup="listbox" aria-expanded="false">
-                                    <?php
-                                        $layoutLabel = $simulationFormData['molecule_layout'] ?: 'Pilih Layout';
-                                    ?>
-                                    <span class="forum-custom-select-label"><?= chemnama_e($layoutLabel); ?></span>
-                                    <span class="forum-custom-select-caret" aria-hidden="true"></span>
-                                </button>
-                                <div class="forum-custom-select-menu" role="listbox" hidden>
-                                    <button class="forum-custom-select-option<?= $simulationFormData['molecule_layout'] === 'Biner' ? ' is-selected' : ''; ?>" type="button" role="option" data-value="Biner" data-label="Biner" aria-selected="<?= $simulationFormData['molecule_layout'] === 'Biner' ? 'true' : 'false'; ?>">Biner</button>
-                                    <button class="forum-custom-select-option<?= $simulationFormData['molecule_layout'] === 'Linear' ? ' is-selected' : ''; ?>" type="button" role="option" data-value="Linear" data-label="Linear" aria-selected="<?= $simulationFormData['molecule_layout'] === 'Linear' ? 'true' : 'false'; ?>">Linear</button>
-                                    <button class="forum-custom-select-option<?= $simulationFormData['molecule_layout'] === 'Trigonal Planar' ? ' is-selected' : ''; ?>" type="button" role="option" data-value="Trigonal Planar" data-label="Trigonal Planar" aria-selected="<?= $simulationFormData['molecule_layout'] === 'Trigonal Planar' ? 'true' : 'false'; ?>">Trigonal Planar</button>
-                                    <button class="forum-custom-select-option<?= $simulationFormData['molecule_layout'] === 'Tetrahedral' ? ' is-selected' : ''; ?>" type="button" role="option" data-value="Tetrahedral" data-label="Tetrahedral" aria-selected="<?= $simulationFormData['molecule_layout'] === 'Tetrahedral' ? 'true' : 'false'; ?>">Tetrahedral</button>
-                                    <button class="forum-custom-select-option<?= $simulationFormData['molecule_layout'] === 'Trigonal Bipyramid' ? ' is-selected' : ''; ?>" type="button" role="option" data-value="Trigonal Bipyramid" data-label="Trigonal Bipyramid" aria-selected="<?= $simulationFormData['molecule_layout'] === 'Trigonal Bipyramid' ? 'true' : 'false'; ?>">Trigonal Bipyramid</button>
-                                </div>
-                            </div>
-                        </label>
-
-                        <label>
-                            <span>Energi Reaksi</span>
-                            <input type="text" name="reaction_energy" placeholder="Contoh: Eksotermik (-411 kJ/mol)" value="<?= chemnama_e($simulationFormData['reaction_energy']); ?>" required>
-                        </label>
-
-                        <label>
-                            <span>Jenis Reaksi</span>
-                            <div class="forum-custom-select" data-guru-custom-select="game_sim_reaction_type">
-                                <input type="hidden" name="reaction_type" value="<?= chemnama_e($simulationFormData['reaction_type']); ?>">
-                                <button class="forum-custom-select-trigger" type="button" aria-haspopup="listbox" aria-expanded="false">
-                                    <?php
-                                        $reactionTypeLabel = $simulationFormData['reaction_type'] ?: 'Pilih Jenis Reaksi';
-                                    ?>
-                                    <span class="forum-custom-select-label"><?= chemnama_e($reactionTypeLabel); ?></span>
-                                    <span class="forum-custom-select-caret" aria-hidden="true"></span>
-                                </button>
-                                <div class="forum-custom-select-menu" role="listbox" hidden>
-                                    <button class="forum-custom-select-option<?= $simulationFormData['reaction_type'] === 'Reaksi Senyawa Ionik' ? ' is-selected' : ''; ?>" type="button" role="option" data-value="Reaksi Senyawa Ionik" data-label="Reaksi Senyawa Ionik" aria-selected="<?= $simulationFormData['reaction_type'] === 'Reaksi Senyawa Ionik' ? 'true' : 'false'; ?>">Reaksi Senyawa Ionik</button>
-                                    <button class="forum-custom-select-option<?= $simulationFormData['reaction_type'] === 'Reaksi Senyawa Kovalen' ? ' is-selected' : ''; ?>" type="button" role="option" data-value="Reaksi Senyawa Kovalen" data-label="Reaksi Senyawa Kovalen" aria-selected="<?= $simulationFormData['reaction_type'] === 'Reaksi Senyawa Kovalen' ? 'true' : 'false'; ?>">Reaksi Senyawa Kovalen</button>
-                                    <button class="forum-custom-select-option<?= $simulationFormData['reaction_type'] === 'Reaksi Redoks' ? ' is-selected' : ''; ?>" type="button" role="option" data-value="Reaksi Redoks" data-label="Reaksi Redoks" aria-selected="<?= $simulationFormData['reaction_type'] === 'Reaksi Redoks' ? 'true' : 'false'; ?>">Reaksi Redoks</button>
-                                    <button class="forum-custom-select-option<?= $simulationFormData['reaction_type'] === 'Reaksi Asam-Basa' ? ' is-selected' : ''; ?>" type="button" role="option" data-value="Reaksi Asam-Basa" data-label="Reaksi Asam-Basa" aria-selected="<?= $simulationFormData['reaction_type'] === 'Reaksi Asam-Basa' ? 'true' : 'false'; ?>">Reaksi Asam-Basa</button>
-                                </div>
-                            </div>
-                        </label>
-
-                        <label class="span-2">
-                            <span>Deskripsi Intro (Ditampilkan di awal simulasi)</span>
-                            <textarea name="intro_description" placeholder="Jelaskan senyawa ini secara singkat untuk intro..." rows="2"><?= chemnama_e($simulationFormData['intro_description']); ?></textarea>
-                        </label>
-
-                        <label class="span-2">
-                            <span>Penjelasan Senyawa (Tentang - Ditampilkan saat reaksi)</span>
-                            <textarea name="description_about" placeholder="Jelaskan senyawa ini..." rows="3" required><?= chemnama_e($simulationFormData['description_about']); ?></textarea>
-                        </label>
-
-                        <label class="span-2">
-                            <span>Ditemukan Di Mana? (Ditampilkan saat reaksi)</span>
-                            <textarea name="found_in" placeholder="Ditemukan di alam dalam bentuk..." rows="2"><?= chemnama_e($simulationFormData['found_in']); ?></textarea>
-                        </label>
-
-                        <label class="span-2">
-                            <span>Kegunaan Sehari-hari (Ditampilkan saat reaksi)</span>
-                            <textarea name="daily_usage" placeholder="Digunakan untuk..." rows="2"><?= chemnama_e($simulationFormData['daily_usage']); ?></textarea>
-                        </label>
-
-                        <div class="form-action-row span-2">
-                            <button class="btn btn-primary" type="submit"><?= chemnama_icon('upload', '#ffffff'); ?> <?= $simulationEditId > 0 ? 'Perbarui' : 'Tambah'; ?></button>
-                            <a class="btn btn-ghost" href="guru_games.php#simulasi">Batal</a>
-                        </div>
-                    </form>
-                </article>
-            <?php endif; ?>
-
-            <div class="materi-list" style="margin-top: 16px;">
-                <?php if (count($simulations) === 0): ?>
-                    <article class="guru-panel materi-item empty">
-                        <h3>Belum ada simulasi</h3>
-                        <p>Tambahkan simulasi reaksi agar bisa dipakai siswa.</p>
-                    </article>
-                <?php else: ?>
-                    <?php foreach ($modules as $module): ?>
-                        <?php
-                            $moduleId = (int) $module['id'];
-                            $moduleSimulations = $simulationsByModule[$moduleId] ?? [];
-                            if (count($moduleSimulations) === 0) {
-                                continue;
-                            }
-                        ?>
-
-                        <article class="guru-panel materi-item" data-module-id="<?= chemnama_e((string) $moduleId); ?>">
-                            <div class="materi-item-head">
-                                <div class="materi-chip-group">
-                                    <span class="materi-chip" style="color: <?= chemnama_e((string) $module['accent']); ?>; background: <?= chemnama_e((string) $module['accent']); ?>15;">
-                                        <?= chemnama_icon((string) $module['icon'], (string) $module['accent']); ?>
-                                        <?= chemnama_e((string) $module['badge']); ?>
-                                    </span>
-                                    <span class="materi-module-label"><?= chemnama_e((string) $module['title']); ?></span>
-                                </div>
-                            </div>
-
-                            <?php foreach ($moduleSimulations as $simulation): ?>
-                                <div class="guru-panel materi-item" style="margin-top: 14px;">
-                                    <div class="materi-item-head">
-                                        <div class="materi-chip-group">
-                                            <span class="materi-chip" style="color: #14b8a6; background: #14b8a615;">
-                                                <?= chemnama_icon('beaker', '#14b8a6'); ?>
-                                                Simulasi
-                                            </span>
-                                            <span class="materi-module-label"><?= chemnama_e((string) $simulation['module_badge']); ?></span>
-                                           
-                                        </div>
-                                        <div class="materi-actions">
-                                            <a class="icon-action" href="guru_games.php?mode=add-simulasi&edit_sim=<?= chemnama_e((string) $simulation['id']); ?>#simulasi" title="Edit">
-                                                <?= chemnama_icon('edit', '#2563eb'); ?>
-                                            </a>
-                                            <form method="post" onsubmit="return confirm('Hapus simulasi ini?')" style="display: inline;">
-                                                <input type="hidden" name="action" value="delete_simulation">
-                                                <input type="hidden" name="simulation_id" value="<?= chemnama_e((string) $simulation['id']); ?>">
-                                                <button class="icon-action danger" type="submit" title="Hapus">
-                                                    <?= chemnama_icon('trash', '#ef4444'); ?>
-                                                </button>
-                                            </form>
-                                        </div>
-                                    </div>
-
-                                    <h3><?= chemnama_e((string) $simulation['product_name']); ?></h3>
-                                    <p><?= chemnama_e((string) $simulation['product_formula']); ?></p>
-                                    <small><?= chemnama_e((string) $simulation['teacher_name']); ?> · <?= chemnama_e((string) $simulation['created_at']); ?></small>
-                                </div>
-                            <?php endforeach; ?>
-                        </article>
-                    <?php endforeach; ?>
-                <?php endif; ?>
-            </div>
-        </section>
-
-        <section class="guru-panel materi-form-panel games-panel" id="chem-match" style="margin-top: 0;" data-games-panel hidden>
+        <section class="guru-panel materi-form-panel games-panel is-active" id="chem-match" style="margin-top: 0;" data-games-panel>
             <div class="guru-headline-row" style="margin-bottom: 16px;">
                 <div>
                     <h1 style="font-size: 1.4rem; margin: 0;">ChemMatch</h1>
@@ -966,7 +502,7 @@ $guruMenus = [
                 <div class="quiz-modal-head games-modal-head">
                     <div>
                         <h3 data-material-modal-title style="color: #f1f5f9;">Daftar Pembaca</h3>
-                        <p data-material-modal-subtitle style="color: #cbd5e1;">Simulasi</p>
+                        <p data-material-modal-subtitle style="color: #cbd5e1;">Games</p>
                     </div>
                     <a class="quiz-modal-close" href="guru_games.php" aria-label="Tutup form">&times;</a>
                 </div>
@@ -1013,6 +549,7 @@ $guruMenus = [
     }
 
     const showPanel = (targetId) => {
+        if (!panels.some(panel => '#' + panel.id === targetId)) targetId = '#chem-match';
         panels.forEach((panel) => {
             const isActive = `#${panel.id}` === targetId;
             panel.classList.toggle('is-active', isActive);
@@ -1030,7 +567,7 @@ $guruMenus = [
         });
     };
 
-    const initialHash = window.location.hash || '#simulasi';
+    const initialHash = window.location.hash || '#chem-match';
     showPanel(initialHash);
 
     tabs.forEach((tab) => {
@@ -1047,7 +584,7 @@ $guruMenus = [
     });
 
     window.addEventListener('hashchange', () => {
-        showPanel(window.location.hash || '#simulasi');
+        showPanel(window.location.hash || '#chem-match');
     });
 })();
 </script>
@@ -1189,6 +726,6 @@ $guruMenus = [
         });
     })();
 </script>
-<script src="assets/js/app.js?v=20260407"></script>
+<script src="assets/js/app.js?v=<?= filemtime(__DIR__ . '/assets/js/app.js') ?>"></script>
 </body>
 </html>

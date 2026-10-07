@@ -1,3 +1,28 @@
+document.querySelectorAll('[data-video-source]').forEach((source) => {
+    const form = source.closest('form');
+    const type = form.querySelector('[name="type"]');
+    const youtube = form.querySelector('[name="youtube_url"]');
+    const upload = form.querySelector('[name="attachment"]');
+    const sync = () => {
+        const video = type.value === 'video';
+        const fromYoutube = source.value === 'youtube';
+        form.querySelector('[data-video-source-field]').hidden = !video;
+        form.querySelector('[data-video-youtube-field]').hidden = video && !fromYoutube;
+        form.querySelector('[data-video-upload-field]').hidden = video && fromYoutube;
+        form.querySelector('[data-video-upload-hint]').hidden = !video;
+        youtube.disabled = video && !fromYoutube;
+        youtube.required = video && fromYoutube;
+        upload.disabled = video && fromYoutube;
+        upload.accept = video ? '.mp4,.webm,video/mp4,video/webm' : '';
+        upload.setCustomValidity(video && upload.files[0]?.size > 10000000
+            ? 'Video maksimal 10 MB. Gunakan YouTube untuk video lebih besar.' : '');
+    };
+    type.addEventListener('change', sync);
+    source.addEventListener('change', sync);
+    upload.addEventListener('change', sync);
+    sync();
+});
+
 document.querySelectorAll('[data-role-switch]').forEach((switcher) => {
     const buttons = switcher.querySelectorAll('[data-role-value]');
     const input = switcher.parentElement.querySelector('[data-role-input]');
@@ -179,7 +204,7 @@ if ('IntersectionObserver' in window) {
 }
 
 (() => {
-    const guruPage = document.querySelector('.guru-page');
+    const guruPage = document.querySelector('main.guru-page') || document.querySelector('.guru-page');
     const sidebar = guruPage?.querySelector('.guru-sidebar');
     const toggleButton = guruPage?.querySelector('[data-guru-sidebar-toggle]');
     const overlay = guruPage?.querySelector('[data-guru-sidebar-overlay]');
@@ -189,23 +214,24 @@ if ('IntersectionObserver' in window) {
     }
 
     const mobileMedia = window.matchMedia('(max-width: 1080px)');
-    let ignoreOverlayClickUntil = 0;
+    const content = guruPage.querySelector('.guru-content, .student-content');
 
     const closeSidebar = () => {
         guruPage.classList.remove('is-sidebar-open');
         toggleButton.setAttribute('aria-expanded', 'false');
-        sidebar.style.transform = '';
-        overlay.style.opacity = '';
-        overlay.style.pointerEvents = '';
+        toggleButton.setAttribute('aria-label', 'Buka navigasi');
+        document.documentElement.classList.remove('is-navigation-open');
+        sidebar.inert = mobileMedia.matches;
+        if (content) content.inert = false;
     };
 
     const openSidebar = () => {
         guruPage.classList.add('is-sidebar-open');
         toggleButton.setAttribute('aria-expanded', 'true');
-        sidebar.style.transform = 'translateX(0)';
-        overlay.style.opacity = '1';
-        overlay.style.pointerEvents = 'auto';
-        ignoreOverlayClickUntil = Date.now() + 260;
+        toggleButton.setAttribute('aria-label', 'Tutup navigasi');
+        document.documentElement.classList.add('is-navigation-open');
+        sidebar.inert = false;
+        if (content) content.inert = true;
     };
 
     toggleButton.addEventListener('click', (event) => {
@@ -224,10 +250,8 @@ if ('IntersectionObserver' in window) {
     });
 
     overlay.addEventListener('click', () => {
-        if (Date.now() < ignoreOverlayClickUntil) {
-            return;
-        }
         closeSidebar();
+        toggleButton.focus();
     });
 
     sidebar.querySelectorAll('a').forEach((link) => {
@@ -239,15 +263,23 @@ if ('IntersectionObserver' in window) {
     });
 
     window.addEventListener('keydown', (event) => {
-        if (event.key === 'Escape') {
+        if (event.key === 'Escape' && guruPage.classList.contains('is-sidebar-open')) {
             closeSidebar();
+            toggleButton.focus();
+        }
+        if (event.key === 'Tab' && guruPage.classList.contains('is-sidebar-open')) {
+            const links = Array.from(sidebar.querySelectorAll('a, button')).filter(item => !item.disabled);
+            const last = links[links.length - 1] || toggleButton;
+            if (event.shiftKey && document.activeElement === toggleButton) {
+                event.preventDefault(); last.focus();
+            } else if (!event.shiftKey && document.activeElement === last) {
+                event.preventDefault(); toggleButton.focus();
+            }
         }
     });
 
     const handleViewportChange = (event) => {
-        if (!event.matches) {
-            closeSidebar();
-        }
+        closeSidebar();
     };
 
     if (typeof mobileMedia.addEventListener === 'function') {
@@ -255,6 +287,7 @@ if ('IntersectionObserver' in window) {
     } else {
         mobileMedia.addListener(handleViewportChange);
     }
+    closeSidebar();
 })();
 
 (() => {

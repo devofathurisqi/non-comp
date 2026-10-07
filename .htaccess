@@ -1,3 +1,15 @@
+# Keep configuration, database scripts, backups and dependency metadata private.
+Options -Indexes
+DirectoryIndex index.php index.html
+<FilesMatch "(?i)(^\.|\.(sql|sqlite|sqlite3|db)$|\.md$|\.backup\.php$|^composer\.(json|lock)$|^migrate\.php$)">
+    Require all denied
+</FilesMatch>
+RewriteEngine On
+RewriteCond %{HTTPS} !=on
+RewriteCond %{HTTP_HOST} !^(localhost|127\.0\.0\.1)(:[0-9]+)?$ [NC]
+RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [R=301,L]
+RewriteRule ^(?:config|app|database|vendor|scripts|tests|\.tools)/ - [F,L,NC]
+
 <IfModule mod_php.c>
     php_value upload_max_filesize 128M
     php_value post_max_size 128M

@@ -7940,3 +7940,105 @@ body.is-modal-open {
         font-size: 0.88rem;
     }
 }
+
+/* Lightweight chemistry theme overrides. */
+/* Decorative artwork is fixed behind content and never receives pointer events. */
+body,
+body.home-page,
+body.auth-page,
+body.guru-page {
+    background: radial-gradient(ellipse at 15% 10%, #31245a 0, transparent 55%),
+        radial-gradient(ellipse at 90% 85%, #113344 0, transparent 50%), #100d24;
+    isolation: isolate;
+}
+body::after {
+    content: '';
+    position: fixed;
+    inset: -20px;
+    z-index: -1;
+    pointer-events: none;
+    background: url('../img/chemistry-pattern.svg') center / cover no-repeat;
+    opacity: .32;
+    animation: chemistry-drift 24s ease-in-out infinite alternate;
+}
+.guru-content,
+.student-content {
+    background: transparent;
+}
+main.guru-page { background: transparent; }
+@keyframes chemistry-drift {
+    from { transform: translate3d(0, -6px, 0); }
+    to { transform: translate3d(0, 6px, 0); }
+}
+.phet-picker {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin: 24px 0;
+}
+.phet-picker select {
+    min-height: 44px;
+    max-width: 100%;
+    padding: 10px 14px;
+    background: #211b3b;
+    border: 1px solid #8b7ab0;
+    border-radius: 12px;
+}
+.phet-frame-shell {
+    overflow: hidden;
+    border: 1px solid #8475a5;
+    border-radius: 18px;
+    background: #fff;
+}
+.phet-frame-shell iframe {
+    display: block;
+    width: 100%;
+    height: clamp(420px, 70vh, 850px);
+    border: 0;
+}
+.phet-page p { line-height: 1.7; }
+.phet-page p a { text-decoration: underline; }
+@media (max-width: 600px) {
+    body::after {
+        inset: 0;
+        background-image: url('../img/chemistry-pattern-mobile.svg');
+        background-size: 100% auto;
+        background-position: center top;
+        background-repeat: repeat-y;
+        opacity: .48;
+    }
+    .phet-picker { align-items: stretch; flex-direction: column; }
+    .phet-frame-shell iframe { height: 65dvh; min-height: 420px; }
+}
+@media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    body::after { animation: none; transform: none; }
+}
+
+/* Keep the drawer above content without covering its own brand. */
+body.guru-page { display: block; height: auto; overflow: visible; }
+.guru-content, .student-content { min-width: 0; }
+.guru-headline-row h1, .page-heading h1 { overflow-wrap: anywhere; }
+.module-chart { display: flex; overflow-x: auto; justify-content: flex-start; }
+.module-chart { min-height: 230px; padding-bottom: 8px; }
+.chart-col { flex: 0 0 64px; }
+.chart-col small { display: block; line-height: 1.4; }
+.chart-col small + small { margin-top: 4px; font-size: .72rem; font-weight: 500; }
+.guru-panel, .panel-card, .summary-card { min-width: 0; }
+.rank-name { min-width: 0; overflow-wrap: anywhere; }
+.rank-row .rank-name:only-child { grid-column: 1 / -1; }
+.materi-form-grid [hidden] { display: none !important; }
+@media (max-width: 1080px) {
+    html.is-navigation-open { overflow: hidden; }
+    .guru-sidebar { height: 100dvh; padding-top: 64px; overscroll-behavior: contain; }
+    .guru-mobile-toggle { position: fixed; width: 44px; height: 44px; cursor: pointer; touch-action: manipulation; }
+    .guru-content, .student-content { padding-top: 76px; }
+    .guru-headline-row { display: flex !important; flex-wrap: wrap; gap: 12px; }
+    .guru-headline-row h1 { font-size: clamp(1.5rem, 5.8vw, 2.1rem); line-height: 1.25; }
+    .guru-content table, .student-content table { max-width: 100%; }
+    .guru-panel { overflow-wrap: anywhere; }
+}
+@media (prefers-reduced-motion: reduce) {
+    .guru-sidebar, .guru-sidebar-overlay, .guru-mobile-toggle span { transition: none; }
+}

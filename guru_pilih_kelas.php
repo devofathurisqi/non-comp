@@ -88,18 +88,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $classStatsStmt = $pdo->prepare(
-        'SELECT ht.class_name AS kelas,
-                        COUNT(DISTINCT hs.student_id) AS student_count,
+        'SELECT up.kelas AS kelas,
+                        COUNT(DISTINCT u.id) AS student_count,
                         ROUND(AVG(COALESCE(sp.average_score, 0))) AS average_score
-         FROM homework_tasks ht
-         LEFT JOIN homework_submissions hs ON hs.task_id = ht.id
-         LEFT JOIN student_progress sp ON sp.user_id = hs.student_id
-         WHERE ht.created_by = :teacher_id
-             AND ht.is_published = 1
-             AND ht.class_name IS NOT NULL
-         GROUP BY ht.class_name'
+         FROM users u
+         JOIN user_profiles up ON up.user_id = u.id
+         LEFT JOIN student_progress sp ON sp.user_id = u.id
+         WHERE u.role = "siswa"
+         GROUP BY up.kelas'
 );
-$classStatsStmt->execute(['teacher_id' => $userId]);
+$classStatsStmt->execute();
 
 $classStatsMap = [];
 foreach ($classStatsStmt->fetchAll() as $row) {
@@ -111,13 +109,14 @@ foreach ($classStatsStmt->fetchAll() as $row) {
 }
 
 $pendingByClassStmt = $pdo->prepare(
-        'SELECT ht.class_name AS kelas, COUNT(*) AS unchecked_count
+        'SELECT up.kelas AS kelas, COUNT(*) AS unchecked_count
      FROM homework_submissions hs
      JOIN homework_tasks ht ON ht.id = hs.task_id
+     JOIN user_profiles up ON up.user_id = hs.student_id
          WHERE ht.created_by = :teacher_id
              AND hs.is_checked = 0
-             AND ht.class_name IS NOT NULL
-         GROUP BY ht.class_name'
+             AND (ht.class_name = up.kelas OR ht.class_name IS NULL)
+         GROUP BY up.kelas'
 );
 $pendingByClassStmt->execute(['teacher_id' => $userId]);
 
@@ -135,6 +134,9 @@ $activeHomeworkStmt = $pdo->prepare(
          GROUP BY class_name'
 );
 $activeHomeworkStmt->execute(['teacher_id' => $userId]);
+$globalHomeworkStmt = $pdo->prepare('SELECT COUNT(*) FROM homework_tasks WHERE created_by = ? AND is_published = 1 AND class_name IS NULL');
+$globalHomeworkStmt->execute([$userId]);
+$globalHomeworkCount = (int) $globalHomeworkStmt->fetchColumn();
 
 $activeHomeworkByClass = [];
 foreach ($activeHomeworkStmt->fetchAll() as $row) {
@@ -168,7 +170,7 @@ $classPickerWallpaper = 'assets/img/bakcground.jpeg?v=20260426';
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="assets/css/style.css">
+    <link rel="stylesheet" href="assets/css/style.css?v=<?= filemtime(__DIR__ . '/assets/css/style.css') ?>">
 </head>
 <body class="dashboard-page class-picker-page" style="--class-picker-wallpaper: url('<?= chemnama_e($classPickerWallpaper); ?>');">
 <main class="class-picker-shell">
@@ -238,7 +240,7 @@ $classPickerWallpaper = 'assets/img/bakcground.jpeg?v=20260426';
                 $accent = $accentPalette[$index % count($accentPalette)];
                 $icon = $iconPalette[$index % count($iconPalette)];
                 $stats = $classStatsMap[$kelas] ?? ['student_count' => 0, 'average_score' => 0];
-                $activeHomeworkCount = $activeHomeworkByClass[$kelas] ?? 0;
+                $activeHomeworkCount = ($activeHomeworkByClass[$kelas] ?? 0) + $globalHomeworkCount;
                 $uncheckedCount = $pendingByClass[$kelas] ?? 0;
             ?>
             <form method="post" class="class-card panel-card<?= $kelas === $currentClass ? ' is-selected' : ''; ?>" style="--class-accent: <?= chemnama_e($accent); ?>;">
@@ -286,7 +288,7 @@ $classPickerWallpaper = 'assets/img/bakcground.jpeg?v=20260426';
         <a class="btn btn-ghost" href="logout.php"><?= chemnama_icon('logout', '#1f2937'); ?> Keluar</a>
     </div>
 </main>
-<script src="assets/js/app.js?v=20260407"></script>
+<script src="assets/js/app.js?v=<?= filemtime(__DIR__ . '/assets/js/app.js') ?>"></script>
 <script>
 (() => {
     const selects = Array.from(document.querySelectorAll('[data-guru-custom-select-root]'));

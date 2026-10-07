@@ -14,6 +14,7 @@ $kelasOptions = chemnama_standard_class_options();
 $kelas = $kelasOptions[0];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    chemnama_validate_csrf();
     $role = $_POST['role'] ?? 'siswa';
     $role = in_array($role, ['guru', 'siswa'], true) ? $role : 'siswa';
     $name = trim((string) ($_POST['name'] ?? ''));
@@ -27,20 +28,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $kelas = $kelasOptions[0];
     }
 
-    if ($name === '' || $loginId === '' || strlen($password) < 6 || $email === '') {
-        $error = 'Isi semua field (nama, ' . chemnama_role_login_label($role) . ', email, dan password minimal 6 karakter).';
+    $configuredCode = chemnama_role_access_code($role);
+    if (!chemnama_auth_attempt($pdo, 'register', strtolower($email))) {
+        $error = 'Terlalu banyak percobaan. Tunggu 15 menit.';
+    } elseif ($name === '' || $loginId === '' || strlen($password) < 8 || strlen($password) > 72 || $email === '') {
+        $error = 'Isi semua field (nama, ' . chemnama_role_login_label($role) . ', email, dan password 8–72 karakter).';
     } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
         $error = 'Email tidak valid.';
     } elseif (!chemnama_is_valid_login_id($role, $loginId)) {
         $error = chemnama_role_login_label($role) . ' tidak valid.';
-    } elseif (!hash_equals(chemnama_role_access_code($role), $roleCode)) {
+    } elseif ($role === 'guru' && $configuredCode === '') {
+        $error = 'Pendaftaran guru belum dibuka. Hubungi pemilik website.';
+    } elseif ($configuredCode !== '' && !hash_equals($configuredCode, $roleCode)) {
         $error = 'Kode akses ' . chemnama_role_label($role) . ' tidak sesuai.';
     } else {
-        $statement = $pdo->prepare('SELECT COUNT(*) FROM users WHERE login_id = :login_id');
-        $statement->execute(['login_id' => $loginId]);
+        $statement = $pdo->prepare('SELECT COUNT(*) FROM users WHERE login_id = :login_id OR email = :email');
+        $statement->execute(['login_id' => $loginId, 'email' => $email]);
 
         if ((int) $statement->fetchColumn() > 0) {
-            $error = chemnama_role_login_label($role) . ' sudah digunakan.';
+            $error = 'NIP/NIS atau email sudah digunakan.';
         } else {
             $profileTableExists = true;
 
@@ -87,8 +93,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     ]);
                 }
 
+                $newUserStatement = $pdo->prepare('SELECT * FROM users WHERE id = :id');
+                $newUserStatement->execute(['id' => $createdUserId]);
+                $newUser = $newUserStatement->fetch();
+                if (!$newUser) {
+                    throw new RuntimeException('Akun baru tidak ditemukan.');
+                }
                 $pdo->commit();
-                $success = 'Akun berhasil dibuat. Silakan masuk.';
+                chemnama_login_user($newUser);
+                header('Location: ' . ($role === 'guru' ? 'guru_pilih_kelas.php' : 'dashboard.php'));
+                exit;
             } catch (Throwable $exception) {
                 if ($pdo->inTransaction()) {
                     $pdo->rollBack();
@@ -109,7 +123,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="assets/css/style.css">
+    <link rel="stylesheet" href="assets/css/style.css?v=<?= filemtime(__DIR__ . '/assets/css/style.css') ?>">
 </head>
 <body class="auth-page">
 <div class="ambient ambient-one"></div>
@@ -136,7 +150,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <div class="alert alert-success"><?= chemnama_e($success); ?></div>
         <?php endif; ?>
 
+        <p>Kode undangan dari pengelola diperlukan untuk membuat akun guru baru. Jika sudah punya akun, pilih Masuk. Siswa boleh mengosongkannya jika pendaftaran terbuka.</p>
         <form method="post" class="auth-form auth-form-modal">
+            <input type="hidden" name="csrf_token" value="<?= chemnama_e(chemnama_csrf_token()); ?>">
             <input type="hidden" name="role" value="<?= chemnama_e($role); ?>" data-role-input>
             <label>
                 <span>Nama Lengkap</span>
@@ -147,8 +163,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 <input type="text" name="login_id" value="<?= chemnama_e($loginId); ?>" placeholder="<?= $role === 'guru' ? 'Contoh: 198712102010011001' : 'Contoh: 22004567'; ?>" required data-auth-login-id data-placeholder-siswa="Contoh: 22004567" data-placeholder-guru="Contoh: 198712102010011001">
             </label>
             <label>
-                <span data-auth-role-label>Kode Akses <?= chemnama_e(chemnama_role_label($role)); ?></span>
-                <input type="text" name="role_code" placeholder="Masukkan kode akses <?= strtolower(chemnama_role_label($role)); ?>" required data-auth-role-code data-role-code-placeholder-siswa="Masukkan kode akses siswa" data-role-code-placeholder-guru="Masukkan kode akses guru">
+                <span data-auth-role-label>Kode Undangan <?= chemnama_e(chemnama_role_label($role)); ?></span>
+                <input type="text" name="role_code" placeholder="Masukkan kode akses <?= strtolower(chemnama_role_label($role)); ?>" data-auth-role-code data-role-code-placeholder-siswa="Masukkan kode akses siswa" data-role-code-placeholder-guru="Masukkan kode akses guru">
             </label>
             <label>
                 <span>Email</span>
@@ -157,7 +173,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <label>
                 <span>Password</span>
                 <div class="password-field">
-                    <input type="password" name="password" placeholder="Password" required data-auth-password>
+                    <input type="password" name="password" placeholder="Password" minlength="8" maxlength="72" autocomplete="new-password" required data-auth-password>
                     <button class="password-toggle" type="button" data-password-toggle data-eye-on="<?= chemnama_e(chemnama_icon('eye', '#64748b')); ?>" data-eye-off="<?= chemnama_e(chemnama_icon('eye-off', '#0f9d58')); ?>" aria-label="Tampilkan password">
                         <?= chemnama_icon('eye', '#64748b'); ?>
                     </button>
@@ -187,6 +203,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <p class="auth-link">Sudah punya akun? <a href="login.php">Masuk</a></p>
     </section>
 </main>
-<script src="assets/js/app.js"></script>
+<script src="assets/js/app.js?v=<?= filemtime(__DIR__ . '/assets/js/app.js') ?>"></script>
 </body>
 </html>

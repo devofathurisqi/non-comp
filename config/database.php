@@ -4,11 +4,11 @@ declare(strict_types=1);
 function chemnama_db_config(): array
 {
     return [
-        'host' => getenv('CHEMNAMA_DB_HOST') ?: '127.0.0.1',
-        'port' => (int) (getenv('CHEMNAMA_DB_PORT') ?: 3306),
-        'name' => getenv('CHEMNAMA_DB_NAME') ?: 'tata_senyawa',
-        'user' => getenv('CHEMNAMA_DB_USER') ?: 'root',
-        'pass' => getenv('CHEMNAMA_DB_PASS') ?: '',
+        'host' => chemnama_env('CHEMNAMA_DB_HOST') ?: '127.0.0.1',
+        'port' => (int) (chemnama_env('CHEMNAMA_DB_PORT') ?: 3306),
+        'name' => chemnama_env('CHEMNAMA_DB_NAME') ?: 'tata_senyawa',
+        'user' => chemnama_env('CHEMNAMA_DB_USER') ?: 'root',
+        'pass' => chemnama_env('CHEMNAMA_DB_PASS') ?: '',
     ];
 }
 
@@ -26,6 +26,7 @@ function chemnama_pdo(): PDO
 
     $config = chemnama_db_config();
 
+    if (chemnama_env('CHEMNAMA_DB_AUTO_CREATE') !== '0') {
     $adminDsn = sprintf(
         'mysql:host=%s;port=%d;charset=utf8mb4',
         $config['host'],
@@ -38,6 +39,8 @@ function chemnama_pdo(): PDO
         'CREATE DATABASE IF NOT EXISTS `%s` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci',
         str_replace('`', '``', $config['name'])
     ));
+
+    }
 
     $dsn = sprintf(
         'mysql:host=%s;port=%d;dbname=%s;charset=utf8mb4',
@@ -63,6 +66,10 @@ function chemnama_initialize_database(PDO $pdo): void
         $pdo->exec(file_get_contents($schemaPath));
     }
 
+    $classLength = (int) $pdo->query("SELECT CHARACTER_MAXIMUM_LENGTH FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'user_profiles' AND column_name = 'kelas'")->fetchColumn();
+    if ($classLength > 0 && $classLength < 255) {
+        $pdo->exec('ALTER TABLE user_profiles MODIFY kelas VARCHAR(255) NOT NULL');
+    }
     chemnama_migrate_essay_tasks_add_class($pdo);
     chemnama_migrate_homework_tasks_add_class($pdo);
     chemnama_migrate_materials_add_class($pdo);
@@ -74,6 +81,7 @@ function chemnama_initialize_database(PDO $pdo): void
     chemnama_migrate_quiz_attempt_answers_selected_option_nullable($pdo);
 
     chemnama_seed_modules_if_empty($pdo);
+    if (chemnama_env('CHEMNAMA_SEED_SAMPLE_CONTENT') === '1') {
     chemnama_seed_materials_if_empty($pdo);
     chemnama_seed_questions_if_empty($pdo);
     chemnama_seed_quiz_sets_if_empty($pdo);
@@ -82,11 +90,10 @@ function chemnama_initialize_database(PDO $pdo): void
     chemnama_seed_essay_if_empty($pdo);
     chemnama_seed_homework_if_empty($pdo);
     chemnama_seed_forum_if_empty($pdo);
-    chemnama_seed_demo_students_if_missing($pdo);
-    chemnama_seed_demo_guru_class_if_missing($pdo);
+    }
 
-    $userCount = (int) $pdo->query('SELECT COUNT(*) FROM users')->fetchColumn();
-    if ($userCount > 0) {
+    $siteCount = (int) $pdo->query('SELECT COUNT(*) FROM site_stats')->fetchColumn();
+    if ($siteCount > 0) {
         return;
     }
 
@@ -109,7 +116,6 @@ function chemnama_migrate_essay_tasks_add_class(PDO $pdo): void
     if ($columnExists === 0) {
         $pdo->exec("ALTER TABLE essay_tasks ADD COLUMN class_name VARCHAR(60) NULL AFTER created_by");
         $pdo->exec("ALTER TABLE essay_tasks ADD KEY idx_essay_tasks_class_name (class_name)");
-    }
 
     $pdo->exec(
         'UPDATE essay_tasks et
@@ -117,6 +123,7 @@ function chemnama_migrate_essay_tasks_add_class(PDO $pdo): void
          SET et.class_name = TRIM(SUBSTRING_INDEX(up.kelas, ",", 1))
          WHERE et.class_name IS NULL OR TRIM(et.class_name) = ""'
     );
+    }
 }
 
 function chemnama_migrate_homework_tasks_add_class(PDO $pdo): void
@@ -135,7 +142,6 @@ function chemnama_migrate_homework_tasks_add_class(PDO $pdo): void
     if ($columnExists === 0) {
         $pdo->exec("ALTER TABLE homework_tasks ADD COLUMN class_name VARCHAR(60) NULL AFTER created_by");
         $pdo->exec("ALTER TABLE homework_tasks ADD KEY idx_homework_tasks_class_name (class_name)");
-    }
 
     $pdo->exec(
         'UPDATE homework_tasks ht
@@ -143,6 +149,7 @@ function chemnama_migrate_homework_tasks_add_class(PDO $pdo): void
          SET ht.class_name = TRIM(SUBSTRING_INDEX(up.kelas, ",", 1))
          WHERE ht.class_name IS NULL OR TRIM(ht.class_name) = ""'
     );
+    }
 }
 
 function chemnama_migrate_materials_add_class(PDO $pdo): void
@@ -160,7 +167,6 @@ function chemnama_migrate_materials_add_class(PDO $pdo): void
     if ($columnExists === 0) {
         $pdo->exec("ALTER TABLE materials ADD COLUMN class_name VARCHAR(60) NULL AFTER created_by");
         $pdo->exec("ALTER TABLE materials ADD KEY idx_materials_class_name (class_name)");
-    }
 
     $pdo->exec(
         'UPDATE materials m
@@ -168,6 +174,7 @@ function chemnama_migrate_materials_add_class(PDO $pdo): void
          SET m.class_name = TRIM(SUBSTRING_INDEX(up.kelas, ",", 1))
          WHERE m.class_name IS NULL OR TRIM(m.class_name) = ""'
     );
+    }
 }
 
 function chemnama_migrate_quiz_sets_add_class(PDO $pdo): void
@@ -185,7 +192,6 @@ function chemnama_migrate_quiz_sets_add_class(PDO $pdo): void
     if ($columnExists === 0) {
         $pdo->exec("ALTER TABLE quiz_sets ADD COLUMN class_name VARCHAR(60) NULL AFTER created_by");
         $pdo->exec("ALTER TABLE quiz_sets ADD KEY idx_quiz_sets_class_name (class_name)");
-    }
 
     $pdo->exec(
         'UPDATE quiz_sets qs
@@ -193,6 +199,7 @@ function chemnama_migrate_quiz_sets_add_class(PDO $pdo): void
          SET qs.class_name = TRIM(SUBSTRING_INDEX(up.kelas, ",", 1))
          WHERE qs.class_name IS NULL OR TRIM(qs.class_name) = ""'
     );
+    }
 }
 
 function chemnama_migrate_users_add_avatar_path(PDO $pdo): void
@@ -318,11 +325,6 @@ function chemnama_migrate_quiz_attempt_answers_selected_option_nullable(PDO $pdo
 
 function chemnama_seed_database(PDO $pdo): void
 {
-    $insertUser = $pdo->prepare(
-           'INSERT INTO users (name, login_id, email, role, password_hash, avatar_color)
-            VALUES (:name, :login_id, :email, :role, :password_hash, :avatar_color)'
-    );
-
     $insertRows = function (string $table, array $rows) use ($pdo): void {
         if (count($rows) === 0) {
             return;
@@ -343,33 +345,6 @@ function chemnama_seed_database(PDO $pdo): void
     };
 
     $pdo->beginTransaction();
-
-    $insertUser->execute([
-        'name' => 'Guru ChemNama',
-        'login_id' => '9000000001',
-        'email' => 'guru@chemnama.id',
-        'role' => 'guru',
-        'password_hash' => password_hash('guru123', PASSWORD_DEFAULT),
-        'avatar_color' => '#0f9d58',
-    ]);
-    $guruId = (int) $pdo->lastInsertId();
-
-    $insertUser->execute([
-        'name' => 'Siswa ChemNama',
-        'login_id' => '1000000002',
-        'email' => 'siswa@chemnama.id',
-        'role' => 'siswa',
-        'password_hash' => password_hash('siswa123', PASSWORD_DEFAULT),
-        'avatar_color' => '#2563eb',
-    ]);
-
-    if ($guruId > 0) {
-        $insertProfile = $pdo->prepare('INSERT INTO user_profiles (user_id, kelas) VALUES (:user_id, :kelas)');
-        $insertProfile->execute([
-            'user_id' => $guruId,
-            'kelas' => 'X IPA 1',
-        ]);
-    }
 
     $insertRows('site_stats', [
         ['label' => 'Siswa Aktif', 'value' => '1,200+', 'subtitle' => 'Telah bergabung', 'sort_order' => 1],
@@ -417,7 +392,6 @@ function chemnama_seed_database(PDO $pdo): void
     chemnama_seed_essay_if_empty($pdo);
     chemnama_seed_homework_if_empty($pdo);
     chemnama_seed_forum_if_empty($pdo);
-    chemnama_seed_demo_students_if_missing($pdo);
     chemnama_seed_quiz_attempts_if_empty($pdo);
 }
 
@@ -1069,137 +1043,5 @@ function chemnama_seed_forum_if_empty(PDO $pdo): void
         'body' => 'Kok AlCl3 termasuk kovalen ya pak? Kan Al itu logam?',
         'thread_type' => 'question',
         'created_at' => '2025-01-20 08:00:00',
-    ]);
-}
-
-function chemnama_seed_demo_students_if_missing(PDO $pdo): void
-{
-    $progressTableExists = (int) $pdo->query("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = 'student_progress'")->fetchColumn();
-    $profilesTableExists = (int) $pdo->query("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = 'user_profiles'")->fetchColumn();
-    if ($progressTableExists === 0 || $profilesTableExists === 0) {
-        return;
-    }
-
-    $demoStudents = [
-        ['name' => 'Aisyah Putri Ramadhani', 'login_id' => '1000001001', 'email' => 'aisyah@chemnama.id', 'avatar_color' => '#f59e0b', 'sort_order' => 1, 'material_count' => 6, 'quiz_count' => 15, 'average_score' => 91, 'status_label' => 'Aktif'],
-        ['name' => 'Dewi Lestari', 'login_id' => '1000001002', 'email' => 'dewi@chemnama.id', 'avatar_color' => '#10b981', 'sort_order' => 2, 'material_count' => 5, 'quiz_count' => 12, 'average_score' => 82, 'status_label' => 'Aktif'],
-        ['name' => 'Fajar Nugroho', 'login_id' => '1000001003', 'email' => 'fajar@chemnama.id', 'avatar_color' => '#ef4444', 'sort_order' => 3, 'material_count' => 3, 'quiz_count' => 7, 'average_score' => 55, 'status_label' => 'Perlu Perhatian'],
-        ['name' => 'Maya Sari', 'login_id' => '1000001004', 'email' => 'maya@chemnama.id', 'avatar_color' => '#d97706', 'sort_order' => 4, 'material_count' => 4, 'quiz_count' => 9, 'average_score' => 68, 'status_label' => 'Aktif'],
-    ];
-
-    $findUser = $pdo->prepare('SELECT id FROM users WHERE email = :email LIMIT 1');
-    $insertUser = $pdo->prepare(
-           'INSERT INTO users (name, login_id, email, role, password_hash, avatar_color)
-            VALUES (:name, :login_id, :email, :role, :password_hash, :avatar_color)'
-    );
-    $findProfile = $pdo->prepare('SELECT user_id FROM user_profiles WHERE user_id = :user_id LIMIT 1');
-    $insertProfile = $pdo->prepare('INSERT INTO user_profiles (user_id, kelas) VALUES (:user_id, :kelas)');
-    $findProgress = $pdo->prepare('SELECT user_id FROM student_progress WHERE user_id = :user_id LIMIT 1');
-    $insertProgress = $pdo->prepare(
-        'INSERT INTO student_progress (user_id, material_count, quiz_count, average_score, status_label, sort_order)
-         VALUES (:user_id, :material_count, :quiz_count, :average_score, :status_label, :sort_order)'
-    );
-
-    foreach ($demoStudents as $student) {
-        $findUser->execute(['email' => $student['email']]);
-        $userId = (int) $findUser->fetchColumn();
-
-        if ($userId === 0) {
-            $insertUser->execute([
-                'name' => $student['name'],
-                'login_id' => $student['login_id'],
-                'email' => $student['email'],
-                'role' => 'siswa',
-                'password_hash' => password_hash('siswa123', PASSWORD_DEFAULT),
-                'avatar_color' => $student['avatar_color'],
-            ]);
-            $userId = (int) $pdo->lastInsertId();
-        }
-
-        $findProfile->execute(['user_id' => $userId]);
-        if ((int) $findProfile->fetchColumn() === 0) {
-            $insertProfile->execute([
-                'user_id' => $userId,
-                'kelas' => 'X IPA 1',
-            ]);
-        }
-
-        $findProgress->execute(['user_id' => $userId]);
-        if ((int) $findProgress->fetchColumn() === 0) {
-            $insertProgress->execute([
-                'user_id' => $userId,
-                'material_count' => $student['material_count'],
-                'quiz_count' => $student['quiz_count'],
-                'average_score' => $student['average_score'],
-                'status_label' => $student['status_label'],
-                'sort_order' => $student['sort_order'],
-            ]);
-        }
-    }
-
-    $extraStudentStmt = $pdo->prepare(
-        'SELECT id, email, name FROM users WHERE role = "siswa" AND email = :email LIMIT 1'
-    );
-
-    $siswaEmail = 'siswa@chemnama.id';
-    $extraStudentStmt->execute(['email' => $siswaEmail]);
-    $siswaId = (int) $extraStudentStmt->fetchColumn();
-    if ($siswaId > 0) {
-        $findProfile->execute(['user_id' => $siswaId]);
-        if ((int) $findProfile->fetchColumn() === 0) {
-            $insertProfile->execute([
-                'user_id' => $siswaId,
-                'kelas' => 'X IPA 1',
-            ]);
-        }
-
-        $findProgress->execute(['user_id' => $siswaId]);
-        if ((int) $findProgress->fetchColumn() === 0) {
-            $insertProgress->execute([
-                'user_id' => $siswaId,
-                'material_count' => 4,
-                'quiz_count' => 10,
-                'average_score' => 76,
-                'status_label' => 'Aktif',
-                'sort_order' => 5,
-            ]);
-        }
-    }
-}
-
-function chemnama_seed_demo_guru_class_if_missing(PDO $pdo): void
-{
-    $guruStmt = $pdo->prepare('SELECT id FROM users WHERE email = :email AND role = "guru" LIMIT 1');
-    $guruStmt->execute(['email' => 'guru@chemnama.id']);
-    $guruId = (int) $guruStmt->fetchColumn();
-    if ($guruId === 0) {
-        return;
-    }
-
-    $profileStmt = $pdo->prepare('SELECT kelas FROM user_profiles WHERE user_id = :user_id LIMIT 1');
-    $profileStmt->execute(['user_id' => $guruId]);
-    $currentClass = trim((string) ($profileStmt->fetchColumn() ?: ''));
-
-    $classList = $currentClass === '' ? [] : array_filter(array_map('trim', explode(',', $currentClass)));
-    if (in_array('X IPA 1', $classList, true)) {
-        return;
-    }
-
-    $classList[] = 'X IPA 1';
-    $newClassValue = implode(', ', array_values(array_unique($classList)));
-
-    if ($currentClass === '') {
-        $insertProfile = $pdo->prepare('INSERT INTO user_profiles (user_id, kelas) VALUES (:user_id, :kelas)');
-        $insertProfile->execute([
-            'user_id' => $guruId,
-            'kelas' => $newClassValue,
-        ]);
-        return;
-    }
-
-    $updateProfile = $pdo->prepare('UPDATE user_profiles SET kelas = :kelas WHERE user_id = :user_id');
-    $updateProfile->execute([
-        'user_id' => $guruId,
-        'kelas' => $newClassValue,
     ]);
 }

@@ -32,6 +32,7 @@ $quizSetsStmt = $pdo->prepare(
          LEFT JOIN user_profiles up_teacher ON up_teacher.user_id = u.id
          LEFT JOIN questions q ON q.quiz_set_id = qs.id AND q.is_published = 1
          WHERE qs.is_published = 1
+             AND (qs.class_name IS NULL OR qs.class_name = :kelas_exact)
              AND u.role = "guru"
              AND INSTR(
                  CONCAT(CHAR(44), REPLACE(up_teacher.kelas, CONCAT(CHAR(44), CHAR(32)), CHAR(44)), CHAR(44)),
@@ -41,7 +42,7 @@ $quizSetsStmt = $pdo->prepare(
          HAVING total_questions > 0
          ORDER BY m.sort_order, qs.sort_order, qs.id'
 );
-$quizSetsStmt->execute(['kelas' => $studentClass]);
+$quizSetsStmt->execute(['kelas' => $studentClass, 'kelas_exact' => $studentClass]);
 $quizSets = $quizSetsStmt->fetchAll();
 $quizSetMap = [];
 foreach ($quizSets as $quizSet) {
@@ -608,7 +609,7 @@ $studentMenus = [
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="assets/css/style.css">
+    <link rel="stylesheet" href="assets/css/style.css?v=<?= filemtime(__DIR__ . '/assets/css/style.css') ?>">
 </head>
 <body class="dashboard-page">
 <main class="guru-page student-page siswa-quiz-page">
@@ -632,6 +633,7 @@ $studentMenus = [
         <div class="guru-menu-block">
             <span class="guru-menu-title">MENU</span>
             <nav class="guru-menu-list">
+                <a class="guru-menu-item" href="phet_viewer.php"><?= chemnama_icon('beaker', '#6b7280'); ?><span>Simulasi PhET</span></a>
                 <?php foreach ($studentMenus as $menu): ?>
                     <a class="guru-menu-item <?= $menu['label'] === 'Kuis PG' ? 'is-active' : ''; ?>" href="<?= chemnama_e($menu['href']); ?>">
                         <?= chemnama_icon($menu['icon'], $menu['label'] === 'Kuis PG' ? '#0f9d58' : '#6b7280'); ?>
@@ -883,6 +885,6 @@ $studentMenus = [
         </div>
     </div>
 <?php endif; ?>
-<script src="assets/js/app.js?v=20260407"></script>
+<script src="assets/js/app.js?v=<?= filemtime(__DIR__ . '/assets/js/app.js') ?>"></script>
 </body>
 </html>

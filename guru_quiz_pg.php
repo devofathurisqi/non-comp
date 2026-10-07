@@ -73,8 +73,8 @@ if ($action === 'save_set') {
         if ($quizSetId > 0) {
             $stmt = $pdo->prepare(
                 'UPDATE quiz_sets
-                  SET module_id = ?, class_name = ?, title = ?, description = ?, question_time_limit_seconds = ?, is_published = ?, published_at = IF(? = 1 AND published_at IS NULL, NOW(), published_at), sort_order = ?, updated_at = NOW()
-                  WHERE id = ? AND created_by = ? AND class_name = ?'
+                  SET module_id = ?, class_name = IF(class_name IS NULL, NULL, ?), title = ?, description = ?, question_time_limit_seconds = ?, is_published = ?, published_at = IF(? = 1 AND published_at IS NULL, NOW(), published_at), sort_order = ?, updated_at = NOW()
+                  WHERE id = ? AND created_by = ? AND (class_name = ? OR class_name IS NULL)'
             );
               $stmt->execute([$moduleId, $activeClass, $title, $description !== '' ? $description : null, $questionTimeLimitSeconds, $isPublished, $isPublished, $sortOrder, $quizSetId, $user['id'], $activeClass]);
             $_SESSION['flash'] = ['type' => 'success', 'message' => 'Quiz berhasil diperbarui.'];
@@ -105,7 +105,7 @@ if ($action === 'save_set') {
 if ($action === 'delete_set') {
     $quizSetId = (int) ($_POST['quiz_set_id'] ?? 0);
     if ($quizSetId > 0) {
-        $stmt = $pdo->prepare('DELETE FROM quiz_sets WHERE id = ? AND created_by = ? AND class_name = ?');
+        $stmt = $pdo->prepare('DELETE FROM quiz_sets WHERE id = ? AND created_by = ? AND (class_name = ? OR class_name IS NULL)');
         $stmt->execute([$quizSetId, $user['id'], $activeClass]);
         $_SESSION['flash'] = ['type' => 'success', 'message' => 'Quiz berhasil dihapus.'];
         header('Location: guru_quiz_pg.php');
@@ -121,7 +121,7 @@ if ($action === 'toggle_publish') {
              SET is_published = CASE WHEN is_published = 1 THEN 0 ELSE 1 END,
                  published_at = CASE WHEN is_published = 1 THEN published_at ELSE NOW() END,
                  updated_at = NOW()
-               WHERE id = ? AND created_by = ? AND class_name = ?'
+               WHERE id = ? AND created_by = ? AND (class_name = ? OR class_name IS NULL)'
         );
            $stmt->execute([$quizSetId, $user['id'], $activeClass]);
         $_SESSION['flash'] = ['type' => 'success', 'message' => 'Status publish quiz diperbarui.'];
@@ -138,7 +138,7 @@ if ($action === 'review_request') {
             'UPDATE quiz_repeat_requests qr
              JOIN quiz_sets qs ON qs.id = qr.quiz_set_id
              SET qr.status = ?, qr.decided_at = NOW(), qr.decided_by = ?
-               WHERE qr.id = ? AND qs.created_by = ? AND qs.class_name = ?'
+               WHERE qr.id = ? AND qs.created_by = ? AND (qs.class_name = ? OR qs.class_name IS NULL)'
         );
            $stmt->execute([$decision, $user['id'], $requestId, $user['id'], $activeClass]);
         $_SESSION['flash'] = ['type' => 'success', 'message' => $decision === 'approved' ? 'Permintaan diizinkan.' : 'Permintaan ditolak.'];
@@ -312,7 +312,7 @@ $quizSetsStmt = $pdo->prepare(
      FROM quiz_sets qs
      JOIN modules m ON m.id = qs.module_id
      WHERE qs.created_by = :created_by
-      AND qs.class_name = :class_name
+      AND (qs.class_name = :class_name OR qs.class_name IS NULL)
      ORDER BY m.sort_order, qs.sort_order, qs.id'
 );
 $quizSetsStmt->execute(['created_by' => $user['id'], 'class_name' => $activeClass]);
@@ -368,7 +368,7 @@ $pendingRequestsStmt = $pdo->prepare(
      JOIN quiz_sets qs ON qs.id = qr.quiz_set_id
      JOIN modules m ON m.id = qs.module_id
      JOIN users u ON u.id = qr.student_id
-    WHERE qs.created_by = :created_by AND qs.class_name = :class_name AND qr.status = "pending"
+    WHERE qs.created_by = :created_by AND (qs.class_name = :class_name OR qs.class_name IS NULL) AND qr.status = "pending"
      ORDER BY qr.requested_at ASC, qr.id ASC'
 );
 $pendingRequestsStmt->execute(['created_by' => $user['id'], 'class_name' => $activeClass]);
@@ -440,7 +440,7 @@ $guruMenus = [
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="assets/css/style.css">
+    <link rel="stylesheet" href="assets/css/style.css?v=<?= filemtime(__DIR__ . '/assets/css/style.css') ?>">
     <style>
         .quiz-tabs {
             display: flex;
@@ -586,6 +586,7 @@ $guruMenus = [
         <div class="guru-menu-block">
             <span class="guru-menu-title">MENU</span>
             <nav class="guru-menu-list">
+                <a class="guru-menu-item" href="phet_viewer.php"><?= chemnama_icon('beaker', '#6b7280'); ?><span>Simulasi PhET</span></a>
                 <?php foreach ($guruMenus as $menu): ?>
                     <a class="guru-menu-item <?= $menu['active'] ? 'is-active' : ''; ?>" href="<?= chemnama_e($menu['href']); ?>">
                         <?= chemnama_icon($menu['icon'], $menu['active'] ? '#0f9d58' : '#6b7280'); ?>
@@ -1182,7 +1183,7 @@ $guruMenus = [
     </div>
 </div>
 
-<script src="assets/js/app.js?v=20260407"></script>
+<script src="assets/js/app.js?v=<?= filemtime(__DIR__ . '/assets/js/app.js') ?>"></script>
 <script>
     // Guru custom selects handler
     (function(){

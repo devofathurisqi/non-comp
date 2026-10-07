@@ -1,0 +1,6 @@
+.env
+assets/.env
+storage/
+.tools/
+php-releases.json
+update-project.cjs

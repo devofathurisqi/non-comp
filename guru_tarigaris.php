@@ -127,7 +127,7 @@ $guruMenus = [
     ['label' => 'Bank Soal PG', 'icon' => 'stack', 'href' => 'guru_soal_pg.php', 'active' => false],
     ['label' => 'Tugas Essay', 'icon' => 'edit', 'href' => 'guru_essay.php', 'active' => false],
     ['label' => 'PR / Homework', 'icon' => 'task', 'href' => 'guru_homework.php', 'active' => false],
-    ['label' => 'Quiz Quiz', 'icon' => 'stack', 'href' => 'guru_quiz_pg.php', 'active' => false],
+    ['label' => 'Quick / Quiz', 'icon' => 'stack', 'href' => 'guru_quiz_pg.php', 'active' => false],
     ['label' => 'Pengaturan Games', 'icon' => 'beaker', 'href' => 'guru_games.php', 'active' => false],
     ['label' => 'Edit Intro Siswa', 'icon' => 'edit', 'href' => 'guru_intro_siswa.php', 'active' => false],
     ['label' => 'Forum Diskusi', 'icon' => 'chat', 'href' => 'guru_forum.php', 'active' => false],
@@ -143,7 +143,7 @@ $flash = chemnama_flash();
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Tarik Garis - Nom Comp</title>
     <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
-    <link rel="stylesheet" href="assets/css/style.css">
+    <link rel="stylesheet" href="assets/css/style.css?v=<?= filemtime(__DIR__ . '/assets/css/style.css') ?>">
 </head>
 <body class="dashboard-page">
 <main class="guru-page">
@@ -151,13 +151,13 @@ $flash = chemnama_flash();
     <div class="guru-sidebar-overlay" data-guru-sidebar-overlay></div>
     <aside class="guru-sidebar" id="guruSidebar">
         <div class="guru-brand"><a class="brand" href="index.php"><?= chemnama_icon('brand', '#d97706'); ?><span>Nom Comp</span></a><p>Panel Guru</p><div class="guru-class-chip"><?= chemnama_e($activeClass); ?></div></div>
-        <div class="guru-menu-block"><span class="guru-menu-title">MENU</span><nav class="guru-menu-list"><?php foreach ($guruMenus as $menu): ?><a class="guru-menu-item <?= $menu['active'] ? 'is-active' : ''; ?>" href="<?= chemnama_e($menu['href']); ?>"><?= chemnama_icon($menu['icon'], $menu['active'] ? '#0f9d58' : '#6b7280'); ?><span><?= chemnama_e($menu['label']); ?></span></a><?php endforeach; ?></nav></div>
+        <div class="guru-menu-block"><span class="guru-menu-title">MENU</span><nav class="guru-menu-list">
+                <a class="guru-menu-item" href="phet_viewer.php"><?= chemnama_icon('beaker', '#6b7280'); ?><span>Simulasi PhET</span></a><?php foreach ($guruMenus as $menu): ?><a class="guru-menu-item <?= $menu['active'] ? 'is-active' : ''; ?>" href="<?= chemnama_e($menu['href']); ?>"><?= chemnama_icon($menu['icon'], $menu['active'] ? '#0f9d58' : '#6b7280'); ?><span><?= chemnama_e($menu['label']); ?></span></a><?php endforeach; ?></nav></div>
         <div class="guru-menu-block"><span class="guru-menu-title">NAVIGASI</span><nav class="guru-menu-list"><a class="guru-menu-item" href="guru_pilih_kelas.php?redirect_to=guru_tarigaris.php"><?= chemnama_icon('switch', '#d97706'); ?><span>Ganti Kelas</span></a><a class="guru-menu-item logout" href="logout.php"><?= chemnama_icon('logout', '#ef4444'); ?><span>Keluar</span></a></nav></div>
     </aside>
     <section class="guru-content materi-content">
         <div class="games-switcher">
             <div class="games-switcher-tabs">
-                <a class="games-switcher-tab" href="guru_games.php"><?= chemnama_icon('beaker', '#d8cde9'); ?><span>Simulasi</span><span class="games-switcher-count">(<?= (int) $simulationCount; ?>)</span></a>
                 <a class="games-switcher-tab is-active" href="guru_tarigaris.php"><?= chemnama_icon('stack', '#ffffff'); ?><span>ChemMatch</span><span class="games-switcher-count">(<?= (int) $matchCount; ?>)</span></a>
                 <a class="games-switcher-tab" href="guru_carikata.php"><?= chemnama_icon('search', '#d8cde9'); ?><span>Cari Kata</span><span class="games-switcher-count">(<?= (int) $wordCount; ?>)</span></a>
             </div>
@@ -170,5 +170,6 @@ $flash = chemnama_flash();
         <div class="materi-list"><?php foreach ($modules as $module): $moduleId = (int) $module['id']; $moduleGames = $gamesByModule[$moduleId] ?? []; if (!$moduleGames) continue; ?><article class="guru-panel materi-item"><div class="materi-item-head"><div class="materi-chip-group"><span class="materi-chip" style="color: <?= chemnama_e((string) $module['accent']); ?>; background: <?= chemnama_e((string) $module['accent']); ?>15;"><?= chemnama_icon((string) $module['icon'], (string) $module['accent']); ?><?= chemnama_e((string) $module['badge']); ?></span><span class="materi-module-label"><?= chemnama_e((string) $module['title']); ?></span></div></div><?php foreach ($moduleGames as $game): ?><div class="guru-panel materi-item" style="margin-top:14px;"><div class="materi-item-head"><div class="materi-chip-group"><span class="materi-chip" style="color:#14b8a6;background:#14b8a615;">Tarik Garis</span><span class="materi-module-label">Dibaca <?= (int) ($game['read_count'] ?? 0); ?>/<?= (int) $totalClassStudents; ?></span></div><div class="materi-actions"><a class="icon-action" href="guru_tarigaris.php?edit=<?= chemnama_e((string) $game['id']); ?>"><?= chemnama_icon('edit', '#2563eb'); ?></a><form method="post" onsubmit="return confirm('Hapus item ini?')"><input type="hidden" name="action" value="delete_match"><input type="hidden" name="match_id" value="<?= chemnama_e((string) $game['id']); ?>"><button class="icon-action danger" type="submit"><?= chemnama_icon('trash', '#ef4444'); ?></button></form></div></div><h3><?= chemnama_e((string) $game['left_term']); ?> ↔ <?= chemnama_e((string) $game['right_term']); ?></h3><p><?= chemnama_e((string) ($game['hint'] ?? '')); ?></p><small><?= chemnama_e((string) $game['teacher_name']); ?> · <?= chemnama_e((string) $game['created_at']); ?></small></div><?php endforeach; ?></article><?php endforeach; ?></div>
     </section>
 </main>
+<script src="assets/js/app.js?v=<?= filemtime(__DIR__ . '/assets/js/app.js') ?>"></script>
 </body>
 </html>

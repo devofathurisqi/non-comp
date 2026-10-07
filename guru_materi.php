@@ -19,48 +19,7 @@ chemnama_ensure_material_reads_table($pdo);
 
 function chemnama_extract_youtube_embed_url(?string $url): ?string
 {
-    if (!$url) {
-        return null;
-    }
-
-    $trimmed = trim($url);
-    if ($trimmed === '') {
-        return null;
-    }
-
-    $parts = parse_url($trimmed);
-    if (!is_array($parts)) {
-        return null;
-    }
-
-    $host = strtolower((string) ($parts['host'] ?? ''));
-
-    if (strpos($host, 'youtu.be') !== false) {
-        $videoId = trim((string) ($parts['path'] ?? ''), '/');
-        return $videoId !== '' ? 'https://www.youtube.com/embed/' . rawurlencode($videoId) : null;
-    }
-
-    if (strpos($host, 'youtube.com') !== false) {
-        $path = (string) ($parts['path'] ?? '');
-
-        if ($path === '/watch') {
-            parse_str((string) ($parts['query'] ?? ''), $query);
-            if (!empty($query['v'])) {
-                return 'https://www.youtube.com/embed/' . rawurlencode((string) $query['v']);
-            }
-        }
-
-        if (strpos($path, '/embed/') === 0) {
-            return $trimmed;
-        }
-
-        if (strpos($path, '/shorts/') === 0) {
-            $videoId = trim(substr($path, 8), '/');
-            return $videoId !== '' ? 'https://www.youtube.com/embed/' . rawurlencode($videoId) : null;
-        }
-    }
-
-    return null;
+    return chemnama_youtube_embed_url($url);
 }
 
 $modules = $pdo->query('SELECT id, badge, title, accent, icon FROM modules ORDER BY sort_order, id')->fetchAll();
@@ -94,7 +53,7 @@ $allowedExt = [
     'teks' => ['txt', 'pdf', 'doc', 'docx'],
     'pdf' => ['pdf'],
     'presentasi' => ['ppt', 'pptx', 'doc', 'docx'],
-    'video' => ['mp4', 'mov', 'mkv', 'webm'],
+    'video' => ['mp4', 'webm'],
     'animasi' => ['zip', 'html', 'json', 'gif', 'mp4'],
 ];
 
@@ -104,7 +63,7 @@ $action = (string) ($_POST['action'] ?? '');
 if ($action === 'delete') {
     $materialId = (int) ($_POST['material_id'] ?? 0);
     if ($materialId > 0) {
-        $check = $pdo->prepare('SELECT file_path FROM materials WHERE id = :id AND created_by = :created_by AND class_name = :class_name LIMIT 1');
+        $check = $pdo->prepare('SELECT file_path FROM materials WHERE id = :id AND created_by = :created_by AND (class_name = :class_name OR class_name IS NULL) LIMIT 1');
         $check->execute(['id' => $materialId, 'created_by' => $user['id'], 'class_name' => $activeClass]);
         $row = $check->fetch();
 
@@ -167,13 +126,15 @@ if ($action === 'save') {
         $errors[] = 'Judul dan deskripsi wajib diisi.';
     }
 
-    if ($youtubeUrl !== '' && filter_var($youtubeUrl, FILTER_VALIDATE_URL) === false) {
-        $errors[] = 'Link YouTube tidak valid.';
+    $videoSource = (string) ($_POST['video_source'] ?? ($youtubeUrl !== '' ? 'youtube' : 'upload'));
+    if ($type === 'video' && $videoSource === 'upload') $youtubeUrl = '';
+    if ($youtubeUrl !== '' && chemnama_youtube_embed_url($youtubeUrl) === null) {
+        $errors[] = 'Gunakan tautan video YouTube yang valid (watch, youtu.be, Shorts, atau live).';
     }
 
     $existing = null;
     if ($materialId > 0) {
-        $check = $pdo->prepare('SELECT * FROM materials WHERE id = :id AND created_by = :created_by AND class_name = :class_name LIMIT 1');
+        $check = $pdo->prepare('SELECT * FROM materials WHERE id = :id AND created_by = :created_by AND (class_name = :class_name OR class_name IS NULL) LIMIT 1');
         $check->execute(['id' => $materialId, 'created_by' => $user['id'], 'class_name' => $activeClass]);
         $existing = $check->fetch();
         if (!$existing) {
@@ -184,7 +145,16 @@ if ($action === 'save') {
     $uploadedFileName = $existing['file_name'] ?? null;
     $uploadedFilePath = $existing['file_path'] ?? null;
 
-    if (isset($_FILES['attachment']) && (int) $_FILES['attachment']['error'] !== UPLOAD_ERR_NO_FILE) {
+    $hasAttachment = isset($_FILES['attachment']) && (int) $_FILES['attachment']['error'] !== UPLOAD_ERR_NO_FILE;
+    if ($type === 'video') {
+        if (!in_array($videoSource, ['youtube', 'upload'], true)) $errors[] = 'Pilih sumber video yang valid.';
+        if ($videoSource === 'youtube' && $youtubeUrl === '') $errors[] = 'Link YouTube wajib diisi.';
+        if ($videoSource === 'upload' && !$hasAttachment && (empty($uploadedFilePath) || !in_array(strtolower(pathinfo($uploadedFilePath, PATHINFO_EXTENSION)), ['mp4', 'webm'], true))) $errors[] = 'Pilih file video MP4 atau WebM.';
+        if ($hasAttachment && (int) ($_FILES['attachment']['size'] ?? 0) > 10_000_000) $errors[] = 'Video maksimal 10 MB. Untuk video lebih besar, gunakan YouTube.';
+        if ($hasAttachment && (int) $_FILES['attachment']['error'] === UPLOAD_ERR_OK && !in_array((new finfo(FILEINFO_MIME_TYPE))->file($_FILES['attachment']['tmp_name']), ['video/mp4', 'video/webm'], true)) $errors[] = 'File harus berupa video MP4 atau WebM yang valid.';
+    }
+
+    if (!$errors && $hasAttachment && !($type === 'video' && $videoSource === 'youtube')) {
         if ((int) $_FILES['attachment']['error'] !== UPLOAD_ERR_OK) {
             $errors[] = 'Upload file gagal, silakan coba lagi.';
         } else {
@@ -206,13 +176,6 @@ if ($action === 'save') {
                 if (!move_uploaded_file((string) $_FILES['attachment']['tmp_name'], $target)) {
                     $errors[] = 'File tidak dapat disimpan ke server.';
                 } else {
-                    if (!empty($uploadedFilePath)) {
-                        $oldAbsolute = APP_ROOT . '/' . ltrim((string) $uploadedFilePath, '/');
-                        if (is_file($oldAbsolute)) {
-                            @unlink($oldAbsolute);
-                        }
-                    }
-
                     $uploadedFileName = $originalName;
                     $uploadedFilePath = 'storage/uploads/materials/' . $newName;
                 }
@@ -228,13 +191,13 @@ if ($action === 'save') {
                     type = :type,
                     title = :title,
                     description = :description,
-                    class_name = :class_name,
+                    class_name = IF(class_name IS NULL, NULL, :class_name),
                     content_text = :content_text,
                     youtube_url = :youtube_url,
                     animation_style = :animation_style,
                     file_name = :file_name,
                     file_path = :file_path
-                 WHERE id = :id AND created_by = :created_by AND class_name = :class_name_filter'
+                 WHERE id = :id AND created_by = :created_by AND (class_name = :class_name_filter OR class_name IS NULL)'
             );
             $update->execute([
                 'module_id' => $moduleId,
@@ -412,7 +375,7 @@ $totalClassStudents = (int) $classStudentCountStmt->fetchColumn();
 
 $materialEditing = null;
 if ($editId > 0) {
-    $qEdit = $pdo->prepare('SELECT * FROM materials WHERE id = :id AND created_by = :created_by AND class_name = :class_name LIMIT 1');
+    $qEdit = $pdo->prepare('SELECT * FROM materials WHERE id = :id AND created_by = :created_by AND (class_name = :class_name OR class_name IS NULL) LIMIT 1');
     $qEdit->execute(['id' => $editId, 'created_by' => $user['id'], 'class_name' => $activeClass]);
     $materialEditing = $qEdit->fetch();
     if (!$materialEditing) {
@@ -461,7 +424,7 @@ $listSql = 'SELECT m.*, mo.badge AS module_badge, mo.title AS module_title, mo.a
                 GROUP BY mr.material_id
             ) mr_summary ON mr_summary.material_id = m.id
             WHERE m.created_by = :created_by
-                            AND m.class_name = :active_class_material
+                            AND (m.class_name = :active_class_material OR m.class_name IS NULL)
             GROUP BY m.id, m.module_id, m.created_by, m.type, m.title, m.description, m.content_text,
                      m.youtube_url, m.animation_style, m.file_name, m.file_path, m.is_published,
                      m.created_at, m.updated_at, mo.badge, mo.title, mo.accent, u.name
@@ -508,7 +471,7 @@ foreach ($materials as &$material) {
 }
 unset($material);
 
-$countStmt = $pdo->prepare('SELECT module_id, COUNT(*) AS total FROM materials WHERE created_by = :created_by AND class_name = :class_name GROUP BY module_id');
+$countStmt = $pdo->prepare('SELECT module_id, COUNT(*) AS total FROM materials WHERE created_by = :created_by AND (class_name = :class_name OR class_name IS NULL) GROUP BY module_id');
 $countStmt->execute(['created_by' => $user['id'], 'class_name' => $activeClass]);
 $countRows = $countStmt->fetchAll();
 $moduleCounts = [];
@@ -530,6 +493,7 @@ $formData = [
     'content_text' => (string) ($materialEditing['content_text'] ?? ''),
     'animation_style' => (string) ($materialEditing['animation_style'] ?? 'Orbit Elektron'),
     'file_name' => (string) ($materialEditing['file_name'] ?? ''),
+    'file_path' => (string) ($materialEditing['file_path'] ?? ''),
 ];
 
 $simulationListSql = 'SELECT s.*, mo.badge AS module_badge, mo.title AS module_title, u.name AS teacher_name,
@@ -716,7 +680,7 @@ $guruMenus = [
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="assets/css/style.css">
+    <link rel="stylesheet" href="assets/css/style.css?v=<?= filemtime(__DIR__ . '/assets/css/style.css') ?>">
 </head>
 <body class="dashboard-page">
 <main class="guru-page">
@@ -740,6 +704,7 @@ $guruMenus = [
         <div class="guru-menu-block">
             <span class="guru-menu-title">MENU</span>
             <nav class="guru-menu-list">
+                <a class="guru-menu-item" href="phet_viewer.php"><?= chemnama_icon('beaker', '#6b7280'); ?><span>Simulasi PhET</span></a>
                 <?php foreach ($guruMenus as $menu): ?>
                     <a class="guru-menu-item <?= $menu['active'] ? 'is-active' : ''; ?>" href="<?= chemnama_e($menu['href']); ?>">
                         <?= chemnama_icon($menu['icon'], $menu['active'] ? '#0f9d58' : '#6b7280'); ?>
@@ -845,8 +810,15 @@ $guruMenus = [
                         <input type="text" name="description" placeholder="Deskripsi singkat" value="<?= chemnama_e($formData['description']); ?>" required>
                     </label>
 
-                    <label class="span-2">
-                        <span>Link YouTube (opsional)</span>
+                    <label class="span-2" data-video-source-field hidden>
+                        <span>Sumber video</span>
+                        <select name="video_source" data-video-source>
+                            <option value="youtube" <?= !empty($formData['youtube_url']) || empty($formData['file_path']) ? 'selected' : ''; ?>>Tautan YouTube</option>
+                            <option value="upload" <?= empty($formData['youtube_url']) && !empty($formData['file_path']) ? 'selected' : ''; ?>>Upload dari perangkat</option>
+                        </select>
+                    </label>
+                    <label class="span-2" data-video-youtube-field>
+                        <span>Link YouTube</span>
                         <input type="url" name="youtube_url" placeholder="https://www.youtube.com/watch?v=..." value="<?= chemnama_e($formData['youtube_url']); ?>">
                     </label>
 
@@ -855,9 +827,10 @@ $guruMenus = [
                         <textarea name="content_text" placeholder="Tulis konten..." rows="4"><?= chemnama_e($formData['content_text']); ?></textarea>
                     </label>
 
-                    <label class="span-2 upload-dropzone">
+                    <label class="span-2 upload-dropzone" data-video-upload-field>
                         <span>Upload file (opsional)</span>
                         <input type="file" name="attachment">
+                        <small data-video-upload-hint hidden>Video MP4 atau WebM, maksimal 10 MB. Untuk video panjang gunakan tautan YouTube.</small>
                         <?php if ($formData['file_name'] !== ''): ?>
                             <small>File saat ini: <?= chemnama_e($formData['file_name']); ?></small>
                         <?php endif; ?>
@@ -1234,6 +1207,8 @@ $guruMenus = [
                                         <div class="materi-youtube-wrap">
                                             <iframe src="<?= chemnama_e($youtubeEmbedUrl); ?>" title="Video YouTube materi" loading="lazy" allowfullscreen></iframe>
                                         </div>
+                                    <?php elseif ($material['type'] === 'video' && !empty($material['file_path'])): ?>
+                                        <video controls playsinline preload="metadata" style="width:100%; border-radius:12px;" src="material_file.php?material_id=<?= (int) $material['id']; ?>"></video>
                                     <?php endif; ?>
 
                                     <?php if (!empty($material['file_name'])): ?>
@@ -1285,7 +1260,7 @@ $guruMenus = [
         </div>
     </section>
 </main>
-<script src="assets/js/app.js?v=20260407"></script>
+<script src="assets/js/app.js?v=<?= filemtime(__DIR__ . '/assets/js/app.js') ?>"></script>
 <script>
     // Materi custom select handler
     (function(){
@@ -1326,6 +1301,7 @@ $guruMenus = [
                     const optionLabel = option.getAttribute('data-label') || option.textContent;
 
                     valueInput.value = value;
+                    valueInput.dispatchEvent(new Event('change', { bubbles: true }));
                     label.textContent = optionLabel;
 
                     options.forEach((opt) => {
