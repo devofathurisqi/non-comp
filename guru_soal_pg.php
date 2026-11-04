@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/config/bootstrap.php';
+require_once __DIR__ . '/app/question_bank.php';
 
 chemnama_require_auth();
 
@@ -56,7 +57,7 @@ $existingQuestion = null;
 $postedQuestionId = (int) ($_POST['question_id'] ?? 0);
 if (in_array($action, ['save', 'delete'], true) && $postedQuestionId > 0) {
     $existingStmt = $pdo->prepare(
-        'SELECT q.id, q.image_url FROM questions q JOIN quiz_sets qs ON qs.id = q.quiz_set_id
+        'SELECT q.id, q.module_id, q.quiz_set_id, q.image_url FROM questions q JOIN quiz_sets qs ON qs.id = q.quiz_set_id
          WHERE q.id = ? AND q.created_by = ? AND qs.created_by = ? AND (qs.class_name = ? OR qs.class_name IS NULL)'
     );
     $existingStmt->execute([$postedQuestionId, $user['id'], $user['id'], $activeClass]);
@@ -89,9 +90,6 @@ if ($action === 'delete') {
     $moduleId = $selectedQuizSetId > 0 && $selectedQuizSet
         ? (int) $selectedQuizSet['module_id']
         : (int) ($_POST['module_id'] ?? 0);
-    $quizSetId = $selectedQuizSetId > 0 && $selectedQuizSet
-        ? (int) $selectedQuizSet['id']
-        : (int) ($_POST['quiz_set_id'] ?? 0);
     $questionText = trim($_POST['question_text'] ?? '');
     $optionA = trim($_POST['option_a'] ?? '');
     $optionB = trim($_POST['option_b'] ?? '');
@@ -106,10 +104,8 @@ if ($action === 'delete') {
     if ($moduleId <= 0 || !isset($moduleMap[$moduleId])) {
         $errors[] = 'Modul tidak valid.';
     }
-    if ($quizSetId <= 0 || !isset($quizSetMap[$quizSetId])) {
-        $errors[] = 'Quiz harus dipilih.';
-    } elseif ((int) $quizSetMap[$quizSetId]['module_id'] !== $moduleId) {
-        $errors[] = 'Quiz harus sesuai dengan modul yang dipilih.';
+    if ($selectedQuizSetId > 0 && !$selectedQuizSet) {
+        $errors[] = 'Quiz tidak ditemukan atau tidak dapat diubah di kelas ini.';
     }
     if (empty($questionText)) {
         $errors[] = 'Pertanyaan tidak boleh kosong.';
@@ -130,6 +126,12 @@ if ($action === 'delete') {
     $newImageUrl = null;
     if (count($errors) === 0) {
         try {
+            $pdo->beginTransaction();
+            $preferredQuizId = $selectedQuizSet ? (int) $selectedQuizSet['id'] : null;
+            if ($preferredQuizId === null && $existingQuestion && (int) $existingQuestion['module_id'] === $moduleId) {
+                $preferredQuizId = (int) $existingQuestion['quiz_set_id'];
+            }
+            $quizSetId = chemnama_question_quiz_set($pdo, $moduleMap[$moduleId], (int) $user['id'], $activeClass, $preferredQuizId);
             $imageUrl = isset($_POST['remove_image']) ? null : ($existingQuestion['image_url'] ?? null);
             $newImageUrl = chemnama_store_question_image($_FILES['question_image'] ?? null);
             if ($newImageUrl !== null) {
@@ -146,7 +148,6 @@ if ($action === 'delete') {
                     $moduleId, $quizSetId, $questionText, $imageUrl, $optionA, $optionB, $optionC, $optionD,
                     $correctOption, $difficulty, $points, $questionId, $user['id'], $user['id'], $activeClass
                 ]);
-                $_SESSION['flash'] = ['type' => 'success', 'message' => 'Soal berhasil diperbarui.'];
             } else {
                 // Insert
                 $stmt = $pdo->prepare(
@@ -158,8 +159,9 @@ if ($action === 'delete') {
                     $moduleId, $quizSetId, $user['id'], $questionText, $imageUrl, $optionA, $optionB, $optionC, $optionD,
                     $correctOption, $difficulty, $points
                 ]);
-                $_SESSION['flash'] = ['type' => 'success', 'message' => 'Soal berhasil ditambahkan.'];
             }
+            $pdo->commit();
+            $_SESSION['flash'] = ['type' => 'success', 'message' => $questionId > 0 ? 'Soal berhasil diperbarui.' : 'Soal berhasil ditambahkan.'];
             if ($existingQuestion && $imageUrl !== $existingQuestion['image_url']) {
                 chemnama_delete_question_image($existingQuestion['image_url']);
             }
@@ -173,6 +175,9 @@ if ($action === 'delete') {
             header('Location: ' . $redirect);
             exit;
         } catch (Exception $e) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
             chemnama_delete_question_image($newImageUrl);
             $errors[] = $e instanceof PDOException ? 'Gagal menyimpan soal. Silakan coba lagi.' : $e->getMessage();
         }
@@ -201,7 +206,7 @@ if ($mode === 'edit' && $editId > 0) {
 }
 
 $formValues = array_replace($editData ?: [], $action === 'save' ? array_intersect_key($_POST, array_flip([
-    'module_id', 'quiz_set_id', 'question_text', 'option_a', 'option_b', 'option_c', 'option_d', 'correct_option', 'difficulty', 'points',
+    'module_id', 'question_text', 'option_a', 'option_b', 'option_c', 'option_d', 'correct_option', 'difficulty', 'points',
 ])) : []);
 $formImageUrl = chemnama_question_image_url($editData['image_url'] ?? null);
 
@@ -497,13 +502,13 @@ if ($flash) {
 
                     <?php if ($selectedQuizSet): ?>
                         <div class="quiz-select-fixed span-2">
-                            <span>Modul & Quiz</span>
+                            <span>Modul</span>
                             <input type="hidden" name="module_id" value="<?php echo (int) $selectedQuizSet['module_id']; ?>">
                             <input type="hidden" name="quiz_set_id" value="<?php echo (int) $selectedQuizSet['id']; ?>">
-                            <input type="text" value="<?php echo chemnama_e($moduleMap[$selectedQuizSet['module_id']]['badge'] . ' - ' . $selectedQuizSet['title']); ?>" readonly>
+                            <input type="text" value="<?php echo chemnama_e($moduleMap[$selectedQuizSet['module_id']]['badge'] . ' - ' . $moduleMap[$selectedQuizSet['module_id']]['title']); ?>" readonly>
                         </div>
                     <?php else: ?>
-                        <label>
+                        <label class="span-2">
                             <span>Modul<span class="required">*</span></span>
                             <div class="forum-custom-select" data-guru-custom-select="soal_module_id">
                                 <input type="hidden" name="module_id" value="<?php echo (int) ($formValues['module_id'] ?? 0); ?>">
@@ -529,19 +534,6 @@ if ($flash) {
                                     <?php endforeach; ?>
                                 </div>
                             </div>
-                        </label>
-
-                        <label for="soal-quiz">
-                            <span>Quiz<span class="required">*</span></span>
-                            <select id="soal-quiz" name="quiz_set_id" required aria-describedby="soal-quiz-help" data-question-quiz-select>
-                                <option value="">Pilih Quiz</option>
-                                <?php $currentQuizSetId = (int) ($formValues['quiz_set_id'] ?? 0); ?>
-                                <?php foreach ($quizSets as $quizSet): ?>
-                                    <option value="<?= (int) $quizSet['id']; ?>" data-module-id="<?= (int) $quizSet['module_id']; ?>" <?= $currentQuizSetId === (int) $quizSet['id'] ? 'selected' : ''; ?> <?= $currentModuleId !== (int) $quizSet['module_id'] ? 'hidden disabled' : ''; ?>><?= chemnama_e($quizSet['title']); ?><?= (int) $quizSet['is_published'] === 1 ? ' (Publish)' : ' (Draft)'; ?></option>
-                                <?php endforeach; ?>
-                            </select>
-                            <small id="soal-quiz-help" data-question-quiz-help>Pilih quiz tujuan untuk soal ini.</small>
-                            <small data-question-quiz-empty hidden><a href="guru_quiz_pg.php?tab=quiz_pg&amp;edit=0#quizFormModal">Buat Quiz</a> untuk modul ini terlebih dahulu.</small>
                         </label>
 
                     <?php endif; ?>
@@ -691,7 +683,6 @@ if ($flash) {
 
                     valueInput.value = value;
                     label.textContent = optionLabel;
-                    valueInput.dispatchEvent(new Event('change', { bubbles: true }));
 
                     options.forEach((opt) => {
                         if (opt === option) {
@@ -720,35 +711,6 @@ if ($flash) {
             });
         });
 
-        const form = document.querySelector('form.soal-form-grid');
-        const moduleInput = form?.querySelector('[name="module_id"]');
-        const quizSelect = form?.querySelector('[data-question-quiz-select]');
-        if (moduleInput && quizSelect) {
-            const help = form.querySelector('[data-question-quiz-help]');
-            const empty = form.querySelector('[data-question-quiz-empty]');
-            const submit = form.querySelector('button[type="submit"]');
-            const placeholder = quizSelect.querySelector('option[value=""]');
-            const updateQuizOptions = () => {
-                let available = 0;
-                Array.from(quizSelect.options).forEach((option) => {
-                    if (!option.value) return;
-                    const matches = option.dataset.moduleId === moduleInput.value;
-                    option.hidden = !matches;
-                    option.disabled = !matches;
-                    if (matches) available++;
-                });
-                const selected = quizSelect.selectedOptions[0];
-                if (selected?.disabled) quizSelect.value = '';
-                const hasModule = Number(moduleInput.value) > 0;
-                quizSelect.disabled = !hasModule || available === 0;
-                submit.disabled = quizSelect.disabled;
-                empty.hidden = !hasModule || available > 0;
-                placeholder.textContent = !hasModule ? 'Pilih modul terlebih dahulu' : available ? 'Pilih Quiz' : 'Belum ada quiz untuk modul ini';
-                help.textContent = !hasModule ? 'Pilih modul untuk melihat daftar quiz.' : available ? 'Soal akan disimpan ke quiz yang dipilih.' : 'Belum ada quiz untuk modul ini.';
-            };
-            moduleInput.addEventListener('change', updateQuizOptions);
-            updateQuizOptions();
-        }
     })();
 </script>
 <script>
