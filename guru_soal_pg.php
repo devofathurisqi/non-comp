@@ -201,7 +201,7 @@ if ($mode === 'edit' && $editId > 0) {
 }
 
 $formValues = array_replace($editData ?: [], $action === 'save' ? array_intersect_key($_POST, array_flip([
-    'module_id', 'question_text', 'option_a', 'option_b', 'option_c', 'option_d', 'correct_option', 'difficulty', 'points',
+    'module_id', 'quiz_set_id', 'question_text', 'option_a', 'option_b', 'option_c', 'option_d', 'correct_option', 'difficulty', 'points',
 ])) : []);
 $formImageUrl = chemnama_question_image_url($editData['image_url'] ?? null);
 
@@ -531,7 +531,19 @@ if ($flash) {
                             </div>
                         </label>
 
-                      
+                        <label for="soal-quiz">
+                            <span>Quiz<span class="required">*</span></span>
+                            <select id="soal-quiz" name="quiz_set_id" required aria-describedby="soal-quiz-help" data-question-quiz-select>
+                                <option value="">Pilih Quiz</option>
+                                <?php $currentQuizSetId = (int) ($formValues['quiz_set_id'] ?? 0); ?>
+                                <?php foreach ($quizSets as $quizSet): ?>
+                                    <option value="<?= (int) $quizSet['id']; ?>" data-module-id="<?= (int) $quizSet['module_id']; ?>" <?= $currentQuizSetId === (int) $quizSet['id'] ? 'selected' : ''; ?> <?= $currentModuleId !== (int) $quizSet['module_id'] ? 'hidden disabled' : ''; ?>><?= chemnama_e($quizSet['title']); ?><?= (int) $quizSet['is_published'] === 1 ? ' (Publish)' : ' (Draft)'; ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                            <small id="soal-quiz-help" data-question-quiz-help>Pilih quiz tujuan untuk soal ini.</small>
+                            <small data-question-quiz-empty hidden><a href="guru_quiz_pg.php?tab=quiz_pg&amp;edit=0#quizFormModal">Buat Quiz</a> untuk modul ini terlebih dahulu.</small>
+                        </label>
+
                     <?php endif; ?>
 
                     <label class="span-2">
@@ -679,6 +691,7 @@ if ($flash) {
 
                     valueInput.value = value;
                     label.textContent = optionLabel;
+                    valueInput.dispatchEvent(new Event('change', { bubbles: true }));
 
                     options.forEach((opt) => {
                         if (opt === option) {
@@ -706,6 +719,36 @@ if ($flash) {
                 }
             });
         });
+
+        const form = document.querySelector('form.soal-form-grid');
+        const moduleInput = form?.querySelector('[name="module_id"]');
+        const quizSelect = form?.querySelector('[data-question-quiz-select]');
+        if (moduleInput && quizSelect) {
+            const help = form.querySelector('[data-question-quiz-help]');
+            const empty = form.querySelector('[data-question-quiz-empty]');
+            const submit = form.querySelector('button[type="submit"]');
+            const placeholder = quizSelect.querySelector('option[value=""]');
+            const updateQuizOptions = () => {
+                let available = 0;
+                Array.from(quizSelect.options).forEach((option) => {
+                    if (!option.value) return;
+                    const matches = option.dataset.moduleId === moduleInput.value;
+                    option.hidden = !matches;
+                    option.disabled = !matches;
+                    if (matches) available++;
+                });
+                const selected = quizSelect.selectedOptions[0];
+                if (selected?.disabled) quizSelect.value = '';
+                const hasModule = Number(moduleInput.value) > 0;
+                quizSelect.disabled = !hasModule || available === 0;
+                submit.disabled = quizSelect.disabled;
+                empty.hidden = !hasModule || available > 0;
+                placeholder.textContent = !hasModule ? 'Pilih modul terlebih dahulu' : available ? 'Pilih Quiz' : 'Belum ada quiz untuk modul ini';
+                help.textContent = !hasModule ? 'Pilih modul untuk melihat daftar quiz.' : available ? 'Soal akan disimpan ke quiz yang dipilih.' : 'Belum ada quiz untuk modul ini.';
+            };
+            moduleInput.addEventListener('change', updateQuizOptions);
+            updateQuizOptions();
+        }
     })();
 </script>
 <script>
