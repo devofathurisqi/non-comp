@@ -21,6 +21,7 @@ Login sebelumnya sudah memakai `users` + `password_hash`/`password_verify`, buka
 - Pendaftaran guru memerlukan kode undangan privat dari environment; konfigurasi kosong menutup pendaftaran guru. Siswa boleh daftar tanpa undangan jika kode siswa kosong. Email dan NIP/NIS unik; password baru 8–72 byte.
 - Seed akun demo dihapus. Akun dan data lama tidak dihapus. Password demo yang sudah ada TIDAK otomatis diubah: reset atau ganti sebelum aplikasi dipublikasikan. Session lama perlu login ulang.
 - Viewer `phet_viewer.php` tersedia dari halaman Materi siswa. Pilihan HTML5 resmi dalam iframe, fullscreen, atribusi, dan tautan cadangan. URL dibatasi daftar resmi, tidak menerima URL bebas.
+- Soal Kuis PG mendukung gambar opsional (JPG, PNG, GIF, WEBP; maksimal 5 MB), preview, penggantian dan penghapusan gambar. Gambar tampil di kuis dalam materi, halaman kuis siswa, dan review jawaban. Kolom `questions.image_url` ditambahkan otomatis tanpa mengubah soal lama. Tes validasi gambar: `php tests/question_images_test.php`.
 - Background SVG atom/orbital/molekul menggantikan foto pada halaman utama/auth/LMS, animasi transform ringan, dekorasi tidak menerima klik, responsive dan `prefers-reduced-motion`.
 - File contoh konfigurasi tidak mengandung secret. `.htaccess` membatasi akses HTTP ke konfigurasi, SQL, backup, script admin, tes dan direktori internal.
 

@@ -152,6 +152,7 @@ CREATE TABLE IF NOT EXISTS questions (
     quiz_set_id BIGINT UNSIGNED NULL,
     created_by BIGINT UNSIGNED NOT NULL,
     question_text MEDIUMTEXT NOT NULL,
+    image_url VARCHAR(255) NULL,
     option_a VARCHAR(255) NOT NULL,
     option_b VARCHAR(255) NOT NULL,
     option_c VARCHAR(255) NOT NULL,

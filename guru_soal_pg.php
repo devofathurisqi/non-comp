@@ -44,10 +44,31 @@ $success = false;
 
 // Handle POST requests
 $action = $_POST['action'] ?? '';
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (empty($_POST) && (int) ($_SERVER['CONTENT_LENGTH'] ?? 0) > 0) {
+        $errors[] = 'Upload terlalu besar untuk server. Pilih gambar maksimal 5 MB dan coba lagi.';
+    } else {
+        chemnama_validate_csrf();
+    }
+}
+
+$existingQuestion = null;
+$postedQuestionId = (int) ($_POST['question_id'] ?? 0);
+if (in_array($action, ['save', 'delete'], true) && $postedQuestionId > 0) {
+    $existingStmt = $pdo->prepare(
+        'SELECT q.id, q.image_url FROM questions q JOIN quiz_sets qs ON qs.id = q.quiz_set_id
+         WHERE q.id = ? AND q.created_by = ? AND qs.created_by = ? AND (qs.class_name = ? OR qs.class_name IS NULL)'
+    );
+    $existingStmt->execute([$postedQuestionId, $user['id'], $user['id'], $activeClass]);
+    $existingQuestion = $existingStmt->fetch() ?: null;
+    if (!$existingQuestion) {
+        $errors[] = 'Soal tidak ditemukan atau tidak dapat diubah di kelas ini.';
+    }
+}
 
 if ($action === 'delete') {
     $questionId = (int) ($_POST['question_id'] ?? 0);
-    if ($questionId > 0) {
+    if ($questionId > 0 && $existingQuestion && count($errors) === 0) {
         try {
             $stmt = $pdo->prepare(
                 'DELETE q FROM questions q
@@ -55,6 +76,9 @@ if ($action === 'delete') {
                  WHERE q.id = ? AND q.created_by = ? AND (qs.class_name = ? OR qs.class_name IS NULL)'
             );
             $stmt->execute([$questionId, $user['id'], $activeClass]);
+            if ($stmt->rowCount() > 0) {
+                chemnama_delete_question_image($existingQuestion['image_url']);
+            }
             $success = true;
             $_SESSION['flash'] = ['type' => 'success', 'message' => 'Soal berhasil dihapus.'];
         } catch (Exception $e) {
@@ -103,32 +127,41 @@ if ($action === 'delete') {
         $errors[] = 'Poin harus antara 1-100.';
     }
 
+    $newImageUrl = null;
     if (count($errors) === 0) {
         try {
+            $imageUrl = isset($_POST['remove_image']) ? null : ($existingQuestion['image_url'] ?? null);
+            $newImageUrl = chemnama_store_question_image($_FILES['question_image'] ?? null);
+            if ($newImageUrl !== null) {
+                $imageUrl = $newImageUrl;
+            }
             if ($questionId > 0) {
                 // Update
                 $stmt = $pdo->prepare(
-                    'UPDATE questions SET module_id = ?, quiz_set_id = ?, question_text = ?, option_a = ?, option_b = ?, 
+                    'UPDATE questions SET module_id = ?, quiz_set_id = ?, question_text = ?, image_url = ?, option_a = ?, option_b = ?,
                      option_c = ?, option_d = ?, correct_option = ?, difficulty = ?, points = ?, 
                      updated_at = CURRENT_TIMESTAMP WHERE id = ? AND created_by = ? AND quiz_set_id IN (SELECT id FROM quiz_sets WHERE created_by = ? AND (class_name = ? OR class_name IS NULL))'
                 );
                 $stmt->execute([
-                    $moduleId, $quizSetId, $questionText, $optionA, $optionB, $optionC, $optionD,
+                    $moduleId, $quizSetId, $questionText, $imageUrl, $optionA, $optionB, $optionC, $optionD,
                     $correctOption, $difficulty, $points, $questionId, $user['id'], $user['id'], $activeClass
                 ]);
                 $_SESSION['flash'] = ['type' => 'success', 'message' => 'Soal berhasil diperbarui.'];
             } else {
                 // Insert
                 $stmt = $pdo->prepare(
-                    'INSERT INTO questions (module_id, quiz_set_id, created_by, question_text, option_a, option_b, 
+                    'INSERT INTO questions (module_id, quiz_set_id, created_by, question_text, image_url, option_a, option_b,
                      option_c, option_d, correct_option, difficulty, points)
-                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
                 );
                 $stmt->execute([
-                    $moduleId, $quizSetId, $user['id'], $questionText, $optionA, $optionB, $optionC, $optionD,
+                    $moduleId, $quizSetId, $user['id'], $questionText, $imageUrl, $optionA, $optionB, $optionC, $optionD,
                     $correctOption, $difficulty, $points
                 ]);
                 $_SESSION['flash'] = ['type' => 'success', 'message' => 'Soal berhasil ditambahkan.'];
+            }
+            if ($existingQuestion && $imageUrl !== $existingQuestion['image_url']) {
+                chemnama_delete_question_image($existingQuestion['image_url']);
             }
             $redirect = 'guru_soal_pg.php';
             if ($selectedQuizSet) {
@@ -140,7 +173,8 @@ if ($action === 'delete') {
             header('Location: ' . $redirect);
             exit;
         } catch (Exception $e) {
-            $errors[] = 'Gagal menyimpan soal: ' . $e->getMessage();
+            chemnama_delete_question_image($newImageUrl);
+            $errors[] = $e instanceof PDOException ? 'Gagal menyimpan soal. Silakan coba lagi.' : $e->getMessage();
         }
     }
 }
@@ -165,6 +199,11 @@ if ($mode === 'edit' && $editId > 0) {
         $mode = 'list';
     }
 }
+
+$formValues = array_replace($editData ?: [], $action === 'save' ? array_intersect_key($_POST, array_flip([
+    'module_id', 'question_text', 'option_a', 'option_b', 'option_c', 'option_d', 'correct_option', 'difficulty', 'points',
+])) : []);
+$formImageUrl = chemnama_question_image_url($editData['image_url'] ?? null);
 
 // Get filter module and count
 $filterModule = (int) ($_GET['module'] ?? 0);
@@ -387,6 +426,7 @@ if ($flash) {
                                           onsubmit="return confirm('Yakin ingin menghapus soal ini?');">
                                         <input type="hidden" name="action" value="delete">
                                         <input type="hidden" name="question_id" value="<?php echo $q['id']; ?>">
+                                        <input type="hidden" name="csrf_token" value="<?= chemnama_e(chemnama_csrf_token()); ?>">
                                         <?php if ($isManagingQuizContext): ?>
                                             <input type="hidden" name="quiz_set_id" value="<?php echo (int) $selectedQuizSetId; ?>">
                                             <input type="hidden" name="manage_quiz" value="1">
@@ -397,6 +437,11 @@ if ($flash) {
                                     </form>
                                 </div>
                             </div>
+                            <?php if ($questionImageUrl = chemnama_question_image_url($q['image_url'] ?? null)): ?>
+                                <a class="quiz-question-image-link" href="<?= chemnama_e($questionImageUrl); ?>" target="_blank" rel="noopener noreferrer" aria-label="Buka gambar soal ukuran penuh">
+                                    <img class="quiz-question-image" src="<?= chemnama_e($questionImageUrl); ?>" alt="Gambar soal" loading="lazy">
+                                </a>
+                            <?php endif; ?>
                             <div class="soal-item-options">
                                 <div class="option-row">
                                     <div class="option-col">
@@ -440,8 +485,9 @@ if ($flash) {
             <article class="guru-panel soal-form-container">
                 <h3><?php echo $editData ? 'Edit Soal' : 'Tambah Soal Baru'; ?></h3>
                 
-                <form method="POST" class="soal-form-grid">
+                <form method="POST" enctype="multipart/form-data" class="soal-form-grid" data-question-image-form>
                     <input type="hidden" name="action" value="save">
+                    <input type="hidden" name="csrf_token" value="<?= chemnama_e(chemnama_csrf_token()); ?>">
                     <?php if ($isManagingQuizContext): ?>
                         <input type="hidden" name="manage_quiz" value="1">
                     <?php endif; ?>
@@ -460,11 +506,11 @@ if ($flash) {
                         <label>
                             <span>Modul<span class="required">*</span></span>
                             <div class="forum-custom-select" data-guru-custom-select="soal_module_id">
-                                <input type="hidden" name="module_id" value="<?php echo (int) ($editData['module_id'] ?? $_POST['module_id'] ?? 0); ?>">
+                                <input type="hidden" name="module_id" value="<?php echo (int) ($formValues['module_id'] ?? 0); ?>">
                                 <button class="forum-custom-select-trigger" type="button" aria-haspopup="listbox" aria-expanded="false">
                                     <?php
                                         $selectedSoalModuleLabel = 'Pilih Modul';
-                                        $currentModuleId = (int) ($editData['module_id'] ?? $_POST['module_id'] ?? 0);
+                                        $currentModuleId = (int) ($formValues['module_id'] ?? 0);
                                         foreach ($modules as $m) {
                                             if ((int) $m['id'] === $currentModuleId) {
                                                 $selectedSoalModuleLabel = $m['badge'] . ' - ' . $m['title'];
@@ -491,41 +537,52 @@ if ($flash) {
                     <label class="span-2">
                         <span>Pertanyaan<span class="required">*</span></span>
                         <textarea name="question_text" required placeholder="Tuliskan pertanyaan di sini..."><?php 
-                            echo chemnama_e($editData['question_text'] ?? $_POST['question_text'] ?? ''); 
+                            echo chemnama_e($formValues['question_text'] ?? '');
                         ?></textarea>
                     </label>
+
+                    <div class="question-image-field span-2">
+                        <label for="question-image">Gambar soal (opsional)</label>
+                        <input type="file" id="question-image" name="question_image" accept="image/jpeg,image/png,image/gif,image/webp" aria-describedby="question-image-help question-image-error" data-question-image-input>
+                        <small id="question-image-help">JPG, PNG, GIF, atau WEBP. Maksimal 5 MB. Pilih gambar baru untuk mengganti gambar lama.</small>
+                        <p id="question-image-error" class="question-image-error" data-question-image-error aria-live="polite"></p>
+                        <img class="quiz-question-image question-image-preview" data-question-image-preview data-existing-src="<?= chemnama_e($formImageUrl ?? ''); ?>" <?= $formImageUrl && !isset($_POST['remove_image']) ? 'src="' . chemnama_e($formImageUrl) . '"' : 'hidden'; ?> alt="Preview gambar soal">
+                        <?php if ($formImageUrl): ?>
+                            <label class="question-image-remove"><input type="checkbox" name="remove_image" value="1" data-question-image-remove <?= isset($_POST['remove_image']) ? 'checked' : ''; ?>> Hapus gambar saat disimpan</label>
+                        <?php endif; ?>
+                    </div>
 
                     <label>
                         <span>Pilihan A<span class="required">*</span></span>
                         <input type="text" name="option_a" required placeholder="Jawaban A..."
-                               value="<?php echo chemnama_e($editData['option_a'] ?? $_POST['option_a'] ?? ''); ?>">
+                               value="<?php echo chemnama_e($formValues['option_a'] ?? ''); ?>">
                     </label>
 
                     <label>
                         <span>Pilihan B<span class="required">*</span></span>
                         <input type="text" name="option_b" required placeholder="Jawaban B..."
-                               value="<?php echo chemnama_e($editData['option_b'] ?? $_POST['option_b'] ?? ''); ?>">
+                               value="<?php echo chemnama_e($formValues['option_b'] ?? ''); ?>">
                     </label>
 
                     <label>
                         <span>Pilihan C<span class="required">*</span></span>
                         <input type="text" name="option_c" required placeholder="Jawaban C..."
-                               value="<?php echo chemnama_e($editData['option_c'] ?? $_POST['option_c'] ?? ''); ?>">
+                               value="<?php echo chemnama_e($formValues['option_c'] ?? ''); ?>">
                     </label>
 
                     <label>
                         <span>Pilihan D<span class="required">*</span></span>
                         <input type="text" name="option_d" required placeholder="Jawaban D..."
-                               value="<?php echo chemnama_e($editData['option_d'] ?? $_POST['option_d'] ?? ''); ?>">
+                               value="<?php echo chemnama_e($formValues['option_d'] ?? ''); ?>">
                     </label>
 
                     <label>
                         <span>Jawaban yang Benar<span class="required">*</span></span>
                         <div class="forum-custom-select" data-guru-custom-select="soal_correct_option">
-                            <input type="hidden" name="correct_option" value="<?php echo ($editData['correct_option'] ?? $_POST['correct_option'] ?? ''); ?>">
+                            <input type="hidden" name="correct_option" value="<?= chemnama_e($formValues['correct_option'] ?? ''); ?>">
                             <button class="forum-custom-select-trigger" type="button" aria-haspopup="listbox" aria-expanded="false">
                                 <?php
-                                    $correctOptValue = $editData['correct_option'] ?? $_POST['correct_option'] ?? '';
+                                    $correctOptValue = $formValues['correct_option'] ?? '';
                                     $correctOptLabel = $correctOptValue ? strtoupper($correctOptValue) : 'Pilih Jawaban';
                                 ?>
                                 <span class="forum-custom-select-label"><?php echo $correctOptLabel; ?></span>
@@ -543,10 +600,10 @@ if ($flash) {
                     <label>
                         <span>Tingkat Kesulitan</span>
                         <div class="forum-custom-select" data-guru-custom-select="soal_difficulty">
-                            <input type="hidden" name="difficulty" value="<?php echo $editData['difficulty'] ?? $_POST['difficulty'] ?? 'sedang'; ?>">
+                            <input type="hidden" name="difficulty" value="<?= chemnama_e($formValues['difficulty'] ?? 'sedang'); ?>">
                             <button class="forum-custom-select-trigger" type="button" aria-haspopup="listbox" aria-expanded="false">
                                 <?php
-                                    $diffValue = $editData['difficulty'] ?? $_POST['difficulty'] ?? 'sedang';
+                                    $diffValue = $formValues['difficulty'] ?? 'sedang';
                                     $diffLabel = $difficultyLabels[$diffValue] ?? 'Sedang';
                                 ?>
                                 <span class="forum-custom-select-label"><?php echo $diffLabel; ?></span>
@@ -563,7 +620,7 @@ if ($flash) {
                     <label>
                         <span>Poin</span>
                         <input type="number" name="points" min="1" max="100" value="<?php 
-                            echo $editData['points'] ?? $_POST['points'] ?? 10; 
+                            echo (int) ($formValues['points'] ?? 10);
                         ?>">
                     </label>
 

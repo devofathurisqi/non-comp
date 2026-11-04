@@ -87,13 +87,17 @@ $inlineQuizQuestions = [];
 if (!empty($quizSets)) {
     $firstQuizSetId = (int) ($quizSets[0]['id']);
     $questionsStmt = $pdo->prepare(
-        'SELECT q.id, q.question_text, q.option_a, q.option_b, q.option_c, q.option_d, q.correct_option, q.points
+        'SELECT q.id, q.question_text, q.image_url, q.option_a, q.option_b, q.option_c, q.option_d, q.correct_option, q.points
          FROM questions q
          WHERE q.quiz_set_id = :quiz_set_id AND q.is_published = 1
          ORDER BY q.id'
     );
     $questionsStmt->execute(['quiz_set_id' => $firstQuizSetId]);
     $inlineQuizQuestions = $questionsStmt->fetchAll();
+    foreach ($inlineQuizQuestions as &$inlineQuestion) {
+        $inlineQuestion['image_url'] = chemnama_question_image_url($inlineQuestion['image_url'] ?? null);
+    }
+    unset($inlineQuestion);
 }
 
 // Detect existing submitted Quiz PG attempt for this student + first quiz set.
@@ -1364,7 +1368,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['quick_quiz_answer']))
                         <small><?= chemnama_e((string) $module['badge']); ?> · <?= chemnama_e($typeLabel); ?></small>
                         <h2><?= chemnama_e((string) $module['title']); ?></h2>
                         <div class="siswa-materi-meta-bottom">
-                            <span><?= chemnama_e((string) $module['teacher_name']); ?></span>
+                            <span><?= chemnama_e((string) ($module['teacher_name'] ?? '')); ?></span>
                             <span><?= $primaryMaterial ? chemnama_e((string) $primaryMaterial['created_at']) : 'Modul'; ?></span>
                         </div>
                     </div>
@@ -1649,6 +1653,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['quick_quiz_answer']))
                                     <div class="quiz-inline-card is-question" data-quiz-question id="quizQuestionCard">
                                         <span class="quiz-inline-label" data-quiz-counter>Soal 1/<?= (int) ($quizSets[0]['total_questions'] ?? 1); ?></span>
                                         <p data-quiz-text></p>
+                                        <a class="quiz-question-image-link" data-quiz-image-link hidden target="_blank" rel="noopener noreferrer" aria-label="Buka gambar soal ukuran penuh">
+                                            <img class="quiz-question-image" data-quiz-image alt="Gambar soal">
+                                        </a>
                                         <div class="quiz-question-footer">
                                             <div id="quizTimer" class="quiz-question-timer">
                                                 <span class="quiz-question-timer-label">WAKTU PER SOAL</span>
@@ -1689,6 +1696,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['quick_quiz_answer']))
 
                                         const container = document.querySelector('[data-quiz-question]');
                                         const textEl = document.querySelector('[data-quiz-text]');
+                                        const imageLinkEl = document.querySelector('[data-quiz-image-link]');
+                                        const imageEl = document.querySelector('[data-quiz-image]');
                                         const counterEl = document.querySelector('[data-quiz-counter]');
                                         const optionsEl = document.querySelector('[data-quiz-options]');
                                         const controlsEl = document.getElementById('quizControls');
@@ -1834,6 +1843,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['quick_quiz_answer']))
                                             setQuizStageVisibility(false);
                                             counterEl.textContent = 'Soal ' + (i+1) + '/' + total;
                                             textEl.textContent = q.question_text || '';
+                                            if (imageEl && imageLinkEl) {
+                                                imageLinkEl.hidden = !q.image_url;
+                                                if (q.image_url) {
+                                                    imageEl.src = q.image_url;
+                                                    imageLinkEl.href = q.image_url;
+                                                } else {
+                                                    imageEl.removeAttribute('src');
+                                                    imageLinkEl.removeAttribute('href');
+                                                }
+                                            }
                                             if (finalSummaryEl) {
                                                 finalSummaryEl.classList.remove('is-visible');
                                                 finalSummaryEl.textContent = '';
@@ -2032,7 +2051,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['quick_quiz_answer']))
                                             };
 
                                             renderQuickQuizLockedView({
-                                                imageUrl: <?= json_encode((string) ($quickQuiz['image_url'] ?? '')); ?>,
+                                                imageUrl: q.image_url || '',
                                                 questionText: q.question_text || '',
                                                 scoreValue: selected === correct ? 100 : 0,
                                                 isCorrect: selected === correct,

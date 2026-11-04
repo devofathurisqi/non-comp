@@ -77,6 +77,7 @@ function chemnama_initialize_database(PDO $pdo): void
     chemnama_migrate_users_add_avatar_path($pdo);
     chemnama_migrate_users_add_login_id($pdo);
     chemnama_migrate_questions_add_quiz_set($pdo);
+    chemnama_migrate_questions_add_image($pdo);
     chemnama_migrate_quiz_sets_add_question_timer($pdo);
     chemnama_migrate_quiz_attempt_answers_selected_option_nullable($pdo);
 
@@ -282,6 +283,23 @@ function chemnama_migrate_questions_add_quiz_set(PDO $pdo): void
     if ($columnExists === 0) {
         $pdo->exec("ALTER TABLE questions ADD COLUMN quiz_set_id BIGINT UNSIGNED NULL AFTER module_id");
         $pdo->exec("ALTER TABLE questions ADD KEY idx_questions_quiz_set (quiz_set_id)");
+    }
+}
+
+function chemnama_migrate_questions_add_image(PDO $pdo): void
+{
+    $columnExists = (int) $pdo->query(
+        "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'questions' AND column_name = 'image_url'"
+    )->fetchColumn();
+    if ($columnExists === 0) {
+        try {
+            $pdo->exec('ALTER TABLE questions ADD COLUMN image_url VARCHAR(255) NULL AFTER question_text');
+        } catch (PDOException $exception) {
+            // Another request may have added the column while this request waited.
+            if ((int) ($exception->errorInfo[1] ?? 0) !== 1060) {
+                throw $exception;
+            }
+        }
     }
 }
 

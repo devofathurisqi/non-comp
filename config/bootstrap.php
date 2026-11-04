@@ -37,6 +37,7 @@ if (is_file($envFile) && is_readable($envFile)) {
 }
 
 require_once APP_ROOT . '/app/helpers.php';
+require_once APP_ROOT . '/app/question_images.php';
 require_once APP_ROOT . '/app/auth.php';
 require_once APP_ROOT . '/config/database.php';
 

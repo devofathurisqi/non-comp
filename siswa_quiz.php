@@ -232,7 +232,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         $selectedQuizSet = $quizSetMap[$selectedQuizSetId];
         $questionsStmt = $pdo->prepare(
-            'SELECT id, question_text, option_a, option_b, option_c, option_d, correct_option, difficulty, points
+            'SELECT id, question_text, image_url, option_a, option_b, option_c, option_d, correct_option, difficulty, points
              FROM questions
              WHERE quiz_set_id = :quiz_set_id AND is_published = 1
              ORDER BY id ASC'
@@ -441,7 +441,7 @@ $questions = [];
 $questionMap = [];
 if ($selectedQuizSet) {
     $questionsStmt = $pdo->prepare(
-        'SELECT id, question_text, option_a, option_b, option_c, option_d, correct_option, difficulty, points
+        'SELECT id, question_text, image_url, option_a, option_b, option_c, option_d, correct_option, difficulty, points
          FROM questions
          WHERE quiz_set_id = :quiz_set_id AND is_published = 1
          ORDER BY id ASC'
@@ -698,6 +698,11 @@ $studentMenus = [
                     <div class="siswa-quiz-question-card">
                         <span class="siswa-quiz-question-label">Soal <?= $currentIndex + 1; ?></span>
                         <p><?= chemnama_e((string) $currentQuestion['question_text']); ?></p>
+                        <?php if ($questionImageUrl = chemnama_question_image_url($currentQuestion['image_url'] ?? null)): ?>
+                            <a class="quiz-question-image-link" href="<?= chemnama_e($questionImageUrl); ?>" target="_blank" rel="noopener noreferrer" aria-label="Buka gambar soal ukuran penuh">
+                                <img class="quiz-question-image" src="<?= chemnama_e($questionImageUrl); ?>" alt="Gambar soal">
+                            </a>
+                        <?php endif; ?>
                     </div>
 
                     <div class="siswa-quiz-live-feedback" data-quiz-live-feedback aria-live="polite"></div>
@@ -769,6 +774,11 @@ $studentMenus = [
                             <article class="siswa-quiz-review-item <?= !empty($reviewItem['is_correct']) ? 'is-correct' : 'is-wrong'; ?>">
                                 <strong>Soal <?= (int) $reviewIndex + 1; ?> · <?= !empty($reviewItem['is_correct']) ? 'Benar' : ($reviewTimedOut ? 'Waktu Habis' : 'Salah'); ?></strong>
                                 <p><?= chemnama_e((string) ($reviewQuestion['question_text'] ?? '')); ?></p>
+                                <?php if ($questionImageUrl = chemnama_question_image_url($reviewQuestion['image_url'] ?? null)): ?>
+                                    <a class="quiz-question-image-link" href="<?= chemnama_e($questionImageUrl); ?>" target="_blank" rel="noopener noreferrer" aria-label="Buka gambar soal ukuran penuh">
+                                        <img class="quiz-question-image" src="<?= chemnama_e($questionImageUrl); ?>" alt="Gambar soal" loading="lazy">
+                                    </a>
+                                <?php endif; ?>
                                 <small>
                                     <?php if ($reviewTimedOut): ?>
                                         Jawaban kamu: tidak dijawab (timer habis)

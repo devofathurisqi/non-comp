@@ -577,3 +577,46 @@ if ('IntersectionObserver' in window) {
     updateSubmitLabel();
     startTimer();
 })();
+
+// Preview optional PG question images before the teacher saves the form.
+document.querySelectorAll('[data-question-image-form]').forEach((form) => {
+    const input = form.querySelector('[data-question-image-input]');
+    const preview = form.querySelector('[data-question-image-preview]');
+    const remove = form.querySelector('[data-question-image-remove]');
+    const error = form.querySelector('[data-question-image-error]');
+    if (!input || !preview || !error) return;
+    let objectUrl = null;
+
+    const updatePreview = () => {
+        if (objectUrl) URL.revokeObjectURL(objectUrl);
+        objectUrl = null;
+        input.setCustomValidity('');
+        error.textContent = '';
+        const file = input.files[0];
+        if (file && !['image/jpeg', 'image/png', 'image/gif', 'image/webp'].includes(file.type)) {
+            error.textContent = 'Pilih gambar JPG, PNG, GIF, atau WEBP.';
+        } else if (file && file.size > 5 * 1024 * 1024) {
+            error.textContent = 'Ukuran gambar maksimal 5 MB.';
+        }
+        input.setCustomValidity(error.textContent);
+        if (file && !error.textContent) {
+            objectUrl = URL.createObjectURL(file);
+            preview.src = objectUrl;
+            preview.hidden = false;
+            if (remove) remove.checked = false;
+        } else {
+            const existing = preview.dataset.existingSrc;
+            preview.hidden = !existing || !!(remove && remove.checked);
+            if (!preview.hidden) preview.src = existing;
+            else preview.removeAttribute('src');
+        }
+    };
+    input.addEventListener('change', updatePreview);
+    if (remove) remove.addEventListener('change', () => {
+        if (remove.checked) input.value = '';
+        updatePreview();
+    });
+    window.addEventListener('pagehide', () => {
+        if (objectUrl) URL.revokeObjectURL(objectUrl);
+    });
+});

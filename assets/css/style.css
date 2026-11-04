@@ -7970,6 +7970,32 @@ main.guru-page { background: transparent; }
     from { transform: translate3d(0, -6px, 0); }
     to { transform: translate3d(0, 6px, 0); }
 }
+.quiz-question-image-link {
+    display: block;
+    margin: 14px 0;
+    min-width: 0;
+}
+.quiz-question-image {
+    display: block;
+    width: auto;
+    height: auto;
+    max-width: 100%;
+    max-height: 420px;
+    object-fit: contain;
+    border-radius: 12px;
+    background: #fff;
+}
+.quiz-question-image-link[hidden],
+.question-image-preview[hidden] { display: none; }
+.question-image-field { display: grid; gap: 10px; min-width: 0; }
+.question-image-field > label { font-weight: 700; }
+.question-image-field input[type="file"] { width: 100%; min-width: 0; }
+.question-image-field small { line-height: 1.6; color: var(--muted); }
+.question-image-error { margin: 0; color: #fca5a5; }
+.question-image-error:empty { display: none; }
+.question-image-field .question-image-remove { display: flex; align-items: center; gap: 8px; }
+.question-image-remove input[type="checkbox"] { width: auto; min-height: 0; }
+
 /* Let the viewer scroll instead of shrinking the simulation's grid row. */
 .phet-content {
     grid-auto-rows: max-content;
