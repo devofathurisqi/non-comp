@@ -7970,6 +7970,10 @@ main.guru-page { background: transparent; }
     from { transform: translate3d(0, -6px, 0); }
     to { transform: translate3d(0, 6px, 0); }
 }
+/* Let the viewer scroll instead of shrinking the simulation's grid row. */
+.phet-content {
+    grid-auto-rows: max-content;
+}
 .phet-picker {
     display: flex;
     align-items: center;
