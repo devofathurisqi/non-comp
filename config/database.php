@@ -1,6 +1,8 @@
 <?php
 declare(strict_types=1);
 
+require_once __DIR__ . '/../app/module_catalog.php';
+
 function chemnama_db_config(): array
 {
     return [
@@ -82,6 +84,7 @@ function chemnama_initialize_database(PDO $pdo): void
     chemnama_migrate_quiz_attempt_answers_selected_option_nullable($pdo);
 
     chemnama_seed_modules_if_empty($pdo);
+    chemnama_normalize_modules($pdo);
     if (chemnama_env('CHEMNAMA_SEED_SAMPLE_CONTENT') === '1') {
     chemnama_seed_materials_if_empty($pdo);
     chemnama_seed_questions_if_empty($pdo);
@@ -367,7 +370,7 @@ function chemnama_seed_database(PDO $pdo): void
     $insertRows('site_stats', [
         ['label' => 'Siswa Aktif', 'value' => '1,200+', 'subtitle' => 'Telah bergabung', 'sort_order' => 1],
         ['label' => 'Tingkat Selesai', 'value' => '98%', 'subtitle' => 'Materi dibuka rutin', 'sort_order' => 2],
-        ['label' => 'Modul Inti', 'value' => '6', 'subtitle' => 'Tata nama senyawa', 'sort_order' => 3],
+        ['label' => 'Modul Inti', 'value' => '3', 'subtitle' => 'Tata nama senyawa', 'sort_order' => 3],
     ]);
 
     $insertRows('hero_updates', [
@@ -382,14 +385,7 @@ function chemnama_seed_database(PDO $pdo): void
         ['badge' => 'Modul 6', 'title' => 'Animasi Ion vs Kovalen', 'description' => 'Perbandingan visual senyawa ionik dan kovalen.', 'accent' => '#8b5cf6', 'icon' => 'compare', 'sort_order' => 3],
     ]);
 
-    $insertRows('modules', [
-        ['badge' => 'Modul 1', 'title' => 'Konsep Dasar Senyawa', 'description' => 'Definisi senyawa, unsur, dan klasifikasi.', 'accent' => '#10b981', 'icon' => 'flask', 'sort_order' => 1],
-        ['badge' => 'Modul 2', 'title' => 'Tata Nama Senyawa Biner', 'description' => 'Aturan IUPAC penamaan senyawa biner.', 'accent' => '#f59e0b', 'icon' => 'atom', 'sort_order' => 2],
-        ['badge' => 'Modul 3', 'title' => 'Senyawa Poliatomik', 'description' => 'Ion poliatomik dan penamaannya.', 'accent' => '#3b82f6', 'icon' => 'nodes', 'sort_order' => 3],
-        ['badge' => 'Modul 4', 'title' => 'Tata Nama Asam', 'description' => 'Penamaan asam biner dan asam oksi.', 'accent' => '#ec4899', 'icon' => 'droplet', 'sort_order' => 4],
-        ['badge' => 'Modul 5', 'title' => 'Tata Nama Basa', 'description' => 'Penamaan basa (hidroksida).', 'accent' => '#14b8a6', 'icon' => 'drop', 'sort_order' => 5],
-        ['badge' => 'Modul 6', 'title' => 'Senyawa Ion & Kovalen', 'description' => 'Membedakan senyawa ionik dan kovalen.', 'accent' => '#8b5cf6', 'icon' => 'link', 'sort_order' => 6],
-    ]);
+    // The module catalog is seeded once by chemnama_seed_modules_if_empty().
 
     $insertRows('use_cases', [
         ['title' => 'Obat yang Kamu Minum', 'description' => 'Paracetamol itu C8H9NO2. Vitamin C yang kamu minum saat flu adalah asam askorbat (C6H8O6). Tanpa tata nama, apoteker tidak bisa meracik obat dengan benar.', 'summary' => 'C8H9NO2 -> Paracetamol', 'accent' => '#10b981', 'icon' => 'pill', 'sort_order' => 1],
@@ -432,14 +428,7 @@ function chemnama_seed_modules_if_empty(PDO $pdo): void
          VALUES (:badge, :title, :description, :accent, :icon, :sort_order)'
     );
 
-    $rows = [
-        ['badge' => 'Modul 1', 'title' => 'Konsep Dasar Senyawa', 'description' => 'Definisi senyawa, unsur, dan klasifikasi.', 'accent' => '#10b981', 'icon' => 'flask', 'sort_order' => 1],
-        ['badge' => 'Modul 2', 'title' => 'Tata Nama Senyawa Biner', 'description' => 'Aturan IUPAC penamaan senyawa biner.', 'accent' => '#f59e0b', 'icon' => 'atom', 'sort_order' => 2],
-        ['badge' => 'Modul 3', 'title' => 'Senyawa Poliatomik', 'description' => 'Ion poliatomik dan penamaannya.', 'accent' => '#3b82f6', 'icon' => 'nodes', 'sort_order' => 3],
-        ['badge' => 'Modul 4', 'title' => 'Tata Nama Asam', 'description' => 'Penamaan asam biner dan asam oksi.', 'accent' => '#ec4899', 'icon' => 'droplet', 'sort_order' => 4],
-        ['badge' => 'Modul 5', 'title' => 'Tata Nama Basa', 'description' => 'Penamaan basa (hidroksida).', 'accent' => '#14b8a6', 'icon' => 'drop', 'sort_order' => 5],
-        ['badge' => 'Modul 6', 'title' => 'Senyawa Ion & Kovalen', 'description' => 'Membedakan senyawa ionik dan kovalen.', 'accent' => '#8b5cf6', 'icon' => 'link', 'sort_order' => 6],
-    ];
+    $rows = chemnama_module_catalog();
 
     foreach ($rows as $row) {
         $insert->execute($row);
@@ -470,7 +459,7 @@ function chemnama_seed_materials_if_empty(PDO $pdo): void
 
     $rows = [
         [
-            'module_id' => 1,
+            'module_id' => chemnama_catalog_module_id($pdo, 1),
             'created_by' => $guruId,
             'type' => 'teks',
             'title' => 'Pengantar Senyawa Kimia',
@@ -482,7 +471,7 @@ function chemnama_seed_materials_if_empty(PDO $pdo): void
             'file_path' => null,
         ],
         [
-            'module_id' => 2,
+            'module_id' => chemnama_catalog_module_id($pdo, 2),
             'created_by' => $guruId,
             'type' => 'presentasi',
             'title' => 'Aturan Tata Nama Senyawa Biner',
@@ -494,7 +483,7 @@ function chemnama_seed_materials_if_empty(PDO $pdo): void
             'file_path' => null,
         ],
         [
-            'module_id' => 3,
+            'module_id' => chemnama_catalog_module_id($pdo, 1),
             'created_by' => $guruId,
             'type' => 'pdf',
             'title' => 'Ion Poliatomik Wajib Hafal',
@@ -506,7 +495,7 @@ function chemnama_seed_materials_if_empty(PDO $pdo): void
             'file_path' => null,
         ],
         [
-            'module_id' => 4,
+            'module_id' => chemnama_catalog_module_id($pdo, 3),
             'created_by' => $guruId,
             'type' => 'animasi',
             'title' => 'Animasi Asam dan Basa',
@@ -558,7 +547,7 @@ function chemnama_seed_questions_if_empty(PDO $pdo): void
 
     $rows = [
         [
-            'module_id' => 1,
+            'module_id' => chemnama_catalog_module_id($pdo, 1),
             'created_by' => $guruId,
             'question_text' => 'Senyawa kimia adalah...',
             'option_a' => 'Zat tunggal yang terdiri dari satu unsur',
@@ -570,7 +559,7 @@ function chemnama_seed_questions_if_empty(PDO $pdo): void
             'points' => 10,
         ],
         [
-            'module_id' => 1,
+            'module_id' => chemnama_catalog_module_id($pdo, 1),
             'created_by' => $guruId,
             'question_text' => 'Perbedaan antara unsur dan senyawa adalah...',
             'option_a' => 'Unsur hanya ada di alam, senyawa hanya dibuat manusia',
@@ -582,7 +571,7 @@ function chemnama_seed_questions_if_empty(PDO $pdo): void
             'points' => 10,
         ],
         [
-            'module_id' => 2,
+            'module_id' => chemnama_catalog_module_id($pdo, 2),
             'created_by' => $guruId,
             'question_text' => 'Rumus molekul yang benar untuk gas nitrogen adalah...',
             'option_a' => 'N',
@@ -594,7 +583,7 @@ function chemnama_seed_questions_if_empty(PDO $pdo): void
             'points' => 10,
         ],
         [
-            'module_id' => 2,
+            'module_id' => chemnama_catalog_module_id($pdo, 2),
             'created_by' => $guruId,
             'question_text' => 'Senyawa dengan rumus NaCl disebut...',
             'option_a' => 'Natrium klor',
@@ -606,7 +595,7 @@ function chemnama_seed_questions_if_empty(PDO $pdo): void
             'points' => 10,
         ],
         [
-            'module_id' => 2,
+            'module_id' => chemnama_catalog_module_id($pdo, 2),
             'created_by' => $guruId,
             'question_text' => 'Rumas kimia untuk gas karbon dioksida adalah...',
             'option_a' => 'CO',
@@ -618,7 +607,7 @@ function chemnama_seed_questions_if_empty(PDO $pdo): void
             'points' => 15,
         ],
         [
-            'module_id' => 3,
+            'module_id' => chemnama_catalog_module_id($pdo, 1),
             'created_by' => $guruId,
             'question_text' => 'Ion poliatomik adalah...',
             'option_a' => 'Ion yang terdiri dari satu atom',
@@ -630,7 +619,7 @@ function chemnama_seed_questions_if_empty(PDO $pdo): void
             'points' => 15,
         ],
         [
-            'module_id' => 3,
+            'module_id' => chemnama_catalog_module_id($pdo, 1),
             'created_by' => $guruId,
             'question_text' => 'Contoh ion poliatomik adalah...',
             'option_a' => 'OH-, NO3-, SO42-',
@@ -642,7 +631,7 @@ function chemnama_seed_questions_if_empty(PDO $pdo): void
             'points' => 15,
         ],
         [
-            'module_id' => 4,
+            'module_id' => chemnama_catalog_module_id($pdo, 3),
             'created_by' => $guruId,
             'question_text' => 'Asam biner adalah...',
             'option_a' => 'Asam yang terdiri dari dua unsur',
@@ -836,7 +825,7 @@ function chemnama_seed_essay_if_empty(PDO $pdo): void
     );
 
     $insertTask->execute([
-        'module_id' => 1,
+        'module_id' => chemnama_catalog_module_id($pdo, 1),
         'created_by' => $guruId,
         'prompt_text' => 'Jelaskan perbedaan unsur dan senyawa. Berikan masing-masing 3 contoh dalam kehidupan sehari-hari.',
         'due_at' => null,
@@ -972,7 +961,7 @@ function chemnama_seed_homework_if_empty(PDO $pdo): void
     );
 
     $insertTask->execute([
-        'module_id' => 2,
+        'module_id' => chemnama_catalog_module_id($pdo, 2),
         'created_by' => $guruId,
         'title' => 'PR Senyawa Biner',
         'description' => 'Berikan 10 contoh senyawa biner beserta tata nama IUPAC dan bilangan oksidasinya.',
